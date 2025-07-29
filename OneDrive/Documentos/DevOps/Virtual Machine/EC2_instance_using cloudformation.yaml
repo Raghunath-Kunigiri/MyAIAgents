@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template to create a named EC2 instance running Ubuntu 24.04 LTS.
+  This template requires an existing EC2 KeyPair and allows you to specify the
+  VPC, Subnet, instance type, and SSH location.
+
+Parameters:
+  VpcId:
+    Description: The ID of the VPC to launch the resources into.
+    Type: AWS::EC2::VPC::Id
+
+  SubnetId:
+    Description: The ID of the Subnet to launch the EC2 instance into.
+    Type: AWS::EC2::Subnet::Id
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+
+  InstanceType:
+    Description: EC2 instance type for the server.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instance (e.g., 1.2.3.4/32).
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+  # 1. Creates a Security Group to act as a firewall for the instance within the specified VPC.
+  DevPracticeSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      # By removing the GroupName property, CloudFormation will generate a unique name
+      # to prevent naming conflicts on subsequent deployments.
+      GroupDescription: "Enable SSH access for the DevPractice instance"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+
+  # 2. Creates the EC2 Instance with the specified properties in the specified Subnet.
+  DevPracticeInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      # Ubuntu Server 24.04 LTS (HVM), SSD Volume Type
+      ImageId: ami-05f991c49d264708f
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !GetAtt DevPracticeSG.GroupId
+      Tags:
+        - Key: Name
+          Value: Devpractice
+
+Outputs:
+  InstanceId:
+    Description: The Instance ID of the newly created EC2 instance.
+    Value: !Ref DevPracticeInstance
+  PublicIp:
+    Description: The Public IP address of the newly created EC2 instance.
+    Value: !GetAtt DevPracticeInstance.PublicIp
+  PublicDnsName:
+    Description: The Public DNS name of the newly created EC2 instance.
+    Value: !GetAtt DevPracticeInstance.PublicDnsName

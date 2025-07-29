@@ -1,0 +1,30 @@
+Here’s the step-by-step process I followed to launch an Ubuntu 24.04 server:
+
+STEP 1: Create a Secure Key Pair 🔑
+First, create the key pair in AWS and save the private key directly to a .pem file.
+
+Bash
+aws ec2 create-key-pair --key-name Devkeyprac --query "KeyMaterial" --output text > Devkeyprac.pem
+
+
+STEP 2: Create a Security Group 🛡️
+Next, create a security group to act as a virtual firewall for the instance.
+
+Bash
+aws ec2 create-security-group --group-name DevPracticeSG --description "Security group for DevPractice instance"
+
+➡️ Heads up: You'll need to copy the GroupId (e.g., sg-xxxxxxxxxxxxxxxxx) from the output of this command for the next steps!
+
+STEP 3: Authorize SSH Access ➕
+Add an inbound rule to the security group to allow SSH traffic on port 22. This is what lets you connect to the instance.
+
+Bash
+aws ec2 authorize-security-group-ingress --group-id <Your-Security-Group-ID> --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+STEP 4: Launch the EC2 Instance! 🚀
+Finally, launch the instance using the specific AMI, instance type, key pair, security group, and a name tag.
+
+Bash
+aws ec2 run-instances --image-id ami-05f991c49d264708f --instance-type t2.micro --key-name Devkeyprac --security-group-ids <Your-Security-Group-ID> --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=Devpractice}]"
+
+Going through each step on the command line really solidifies the concepts behind cloud infrastructure. It’s a great exercise!
