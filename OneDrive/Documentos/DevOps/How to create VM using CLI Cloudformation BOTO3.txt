@@ -1,0 +1,116 @@
+Spending today revising some core AWS automation concepts, and I wanted to share my notes for anyone who might be working through these topics or feeling stuck. It’s always great to go back to the fundamentals!
+
+If you're preparing for a DevOps role or just trying to master Infrastructure as Code, here’s a breakdown of how to connect to AWS and then provision an EC2 instance, along with common pitfalls and solutions.
+
+1. Connecting to AWS with the CLI 🔌
+
+Before you can automate anything, you need to securely connect your local machine to your AWS account.
+
+Key Command: aws configure
+
+This command will prompt you for your Access Key ID, Secret Access Key, default region, and output format. You get these credentials by creating an IAM User in the AWS Console.
+
+Verification: After configuration, run aws sts get caller identity. This command should return your account and user details, confirming you're successfully connected.
+
+Step 1: Configure the AWS CLI
+This is the main command you will use to connect your local machine to your AWS account. Open your terminal or command prompt and run:
+
+Bash
+
+aws configure
+The command will then prompt you for four pieces of information one by one.
+
+Step 2: Provide Your Credentials and Configuration
+AWS Access Key ID [None]:
+
+Paste the Access Key ID you saved from the IAM user creation step and press Enter.
+
+AWS Secret Access Key [None]:
+
+Paste the Secret Access Key you saved and press Enter.
+
+Default region name [None]:
+
+Enter the region you want to work in by default (e.g., us-east-1, us-west-2). This saves you from having to specify the region in every command. Press Enter.
+
+Default output format [None]:
+
+This determines how results are displayed. The most common formats are json (default), text, and table. You can just press Enter to accept the default, or type json and press Enter.
+
+After you complete these steps, the AWS CLI will save your credentials in a configuration file on your computer, and you will be connected.
+
+Step 3: Verify the Connection
+To make sure everything is working, you can run a simple command to get information about your identity.
+
+Bash
+
+aws sts get-caller-identity
+
+If the connection is successful, this command will return your Account ID, User ID, and the ARN of the IAM user you configured, confirming that you are successfully connected to your AWS account.
+
+2. Revisiting the AWS CLI for Resource Creation ⚙️
+
+Once connected, you can create resources step by step. This is the best way to understand what automation tools are doing under the hood.
+
+Key Commands: create key pair, create security group, authorize security group ingress, and run instances.
+
+Struggling with this? The most common issues are usually incorrect permissions on your .pem file or a security group rule that isn't configured correctly.
+
+Here’s the step-by-step process I followed to launch an Ubuntu 24.04 server:
+
+STEP 1: Create a Secure Key Pair 🔑
+First, create the key pair in AWS and save the private key directly to a .pem file.
+
+Bash
+aws ec2 create-key-pair --key-name Devkeyprac --query "KeyMaterial" --output text > Devkeyprac.pem
+
+
+STEP 2: Create a Security Group 🛡️
+Next, create a security group to act as a virtual firewall for the instance.
+
+Bash
+aws ec2 create-security-group --group-name DevPracticeSG --description "Security group for DevPractice instance"
+
+➡️ Heads up: You'll need to copy the GroupId (e.g., sg-xxxxxxxxxxxxxxxxx) from the output of this command for the next steps!
+
+STEP 3: Authorize SSH Access ➕
+Add an inbound rule to the security group to allow SSH traffic on port 22. This is what lets you connect to the instance.
+
+Bash
+aws ec2 authorize-security-group-ingress --group-id <Your-Security-Group-ID> --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+STEP 4: Launch the EC2 Instance! 🚀
+Finally, launch the instance using the specific AMI, instance type, key pair, security group, and a name tag.
+
+Bash
+aws ec2 run-instances --image-id ami-05f991c49d264708f --instance-type t2.micro --key-name Devkeyprac --security-group-ids <Your-Security-Group-ID> --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=Devpractice}]"
+
+Going through each step on the command line really solidifies the concepts behind cloud infrastructure. It’s a great exercise!
+
+3. Debugging CloudFormation Templates 📜
+
+CloudFormation is powerful, but its error messages can be tricky. I spent time deliberately recreating common failures to solidify my debugging skills.
+
+Struggling with ROLLBACK_COMPLETE?
+
+Check the Events tab! The reason is always there.
+
+"Resource already exists": This often means a previous failed stack left a resource behind (like a security group). You need to delete the old resource manually.
+
+"Parameter validation failed": This means you're passing an invalid value (like a non existent KeyPair or VPC ID) when launching the stack. Always use the dropdowns in the console to select valid resources.
+
+4. Building a Robust Boto3 Script 🐍
+
+Finally, I refined a Python script to automate the entire process. The goal isn't just to make it work once, but to make it idempotent (runnable multiple times without errors).
+
+Struggling with script errors?
+
+InvalidKeyPair.Duplicate: Your script should check if a key pair or security group already exists before trying to create it.
+
+InvalidAMIID.NotFound: Don't hard code AMI IDs! They are region specific. Use the AWS SSM Parameter Store to dynamically fetch the latest AMI ID for your target region.
+
+I hope this breakdown helps anyone on their cloud journey. If you're stuck on any of these steps or just want to chat about DevOps tools, feel free to reach out!
+
+What's the most challenging part of AWS automation for you?
+
+#AWS #DevOps #EC2 #CloudFormation #Python #Boto3 #InfrastructureAsCode #CloudComputing #TechHelp
