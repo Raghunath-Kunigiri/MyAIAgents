@@ -1,0 +1,699 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "84ee39cc-3f82-48e5-a311-1af8a1bc6176",
+      "name": "Schedule Trigger (30s)2",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        1888
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const item of $input.all()) {\n  const job = item.json;\n  const url = job.jobUrl;\n  const idMatch = url ? url.match(/(\\d+)/) : null;\n  const job_id = idMatch ? idMatch[0] : null;\n  const job_url = job_id ? `https://www.linkedin.com/jobs/view/${job_id}` : url;\n  const loc = job.location || \"\";\n  const parts = loc.split(',').map(s => s.trim());\n  \n  // Determine source based on job title keywords\n  let source = \"LinkedIn\";\n  const title = (job.jobTitleRaw || \"\").toLowerCase();\n  if (title.includes(\"devops\") || title.includes(\"cloud\") || title.includes(\"infrastructure\")) {\n    source = \"LinkedIn-DevOps\";\n  } else if (title.includes(\"backend\") || title.includes(\"full stack\") || title.includes(\"fullstack\")) {\n    source = \"LinkedIn-Backend\";\n  }\n  \n  out.push({\n    json: {\n      job_id,\n      job_url,\n      job_title: job.jobTitleRaw?.trim() || \"\",\n      company_name: job.companyNameRaw?.trim() || \"\",\n      location_full: loc,\n      location_city: parts[0] || \"\",\n      location_state: parts[1] || \"\",\n      employment_type: \"Full-time\",\n      remote_option: title.includes(\"remote\") ? \"remote\" : \"on-site\",\n      _source: source,\n      timestamp_added: new Date().toISOString()\n    }\n  });\n}\n\nconsole.log(`Normalized ${out.length} jobs`);\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        1872
+      ],
+      "id": "771a9789-2bc1-4b25-bfec-c6ab712c80a1",
+      "name": "Normalize Jobs2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const numberOfPages = 4;\nconst jobsPerPage = 25;\nconst paginationItems = [];\nfor (let page = 0; page < numberOfPages; page++) {\n  paginationItems.push({ json: { offset: page * jobsPerPage, page_number: page + 1, timestamp: new Date().toISOString() } });\n}\nreturn paginationItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        1872
+      ],
+      "id": "645691d1-f4cf-451d-a1b2-49647dc31b65",
+      "name": "Create Pagination Offsets4"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={{ encodeURIComponent('Backend Developer') }}&location=United%20States&f_TPR=r86400&f_JT=F,I&start={{ $json.offset || 0 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linkedInOAuth2Api",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "id": "b01dac61-650d-4223-9816-d466a7c81471",
+      "name": "Fetch Backend Jobs (LinkedIn)4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -752,
+        1760
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "LinkedIn_Credential_ID",
+          "name": "My LinkedIn Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={{ encodeURIComponent('DevOps Engineer') }}&location=United%20States&f_TPR=r86400&f_JT=F,I&f_E=4&start={{ $json.offset || 0 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linkedInOAuth2Api",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "id": "5ae7ddf1-6485-440a-a81f-7c5d42b75d71",
+      "name": "Fetch DevOps Jobs (LinkedIn)4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -752,
+        1968
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "Linkedin OAuth Credential",
+          "name": "My LinkedIn Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "jobTitleRaw",
+              "cssSelector": ".base-search-card__title"
+            },
+            {
+              "key": "companyNameRaw",
+              "cssSelector": ".base-search-card__subtitle a"
+            },
+            {
+              "key": "location",
+              "cssSelector": ".job-search-card__location"
+            },
+            {
+              "key": "jobUrl",
+              "cssSelector": ".base-card__full-link",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "postedDateRaw",
+              "cssSelector": "time",
+              "returnValue": "attribute"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -528,
+        1760
+      ],
+      "id": "fddb1175-6621-45c0-a885-1170c708e68e",
+      "name": "Parse Backend HTML3"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "jobTitleRaw",
+              "cssSelector": ".base-search-card__title"
+            },
+            {
+              "key": "companyNameRaw",
+              "cssSelector": ".base-search-card__subtitle a"
+            },
+            {
+              "key": "location",
+              "cssSelector": ".job-search-card__location"
+            },
+            {
+              "key": "jobUrl",
+              "cssSelector": ".base-card__full-link",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "postedDateRaw",
+              "cssSelector": "time",
+              "returnValue": "attribute"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -528,
+        1968
+      ],
+      "id": "c9bbab87-a5cc-42a6-9dcd-7b0d27976845",
+      "name": "Parse DevOps HTML3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discordapp.com/api/webhooks/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "lowercaseHeaders": false
+        }
+      },
+      "id": "d7b293d5-46df-42c0-a292-b7bc42a62325",
+      "name": "Notify Discord (Webhook)2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        1840
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Discord Webhook Payload\nconst jobs = $input.all().map(i => i.json);\n\nif (!jobs.length) {\n  return [];\n}\n\n// Create rich embeds for Discord (max 10 per message)\nconst embeds = jobs.slice(0, 10).map(job => ({\n  title: job.job_title,\n  url: job.job_url,\n  color: 3447003, // Blue color\n  fields: [\n    {\n      name: \"🏢 Company\",\n      value: job.company_name || \"N/A\",\n      inline: true\n    },\n    {\n      name: \"📍 Location\",\n      value: job.location_full || \"N/A\",\n      inline: true\n    },\n    {\n      name: \"💼 Type\",\n      value: job.employment_type || \"Full-time\",\n      inline: true\n    },\n    {\n      name: \"🏠 Remote\",\n      value: job.remote_option || \"on-site\",\n      inline: true\n    }\n  ],\n  footer: {\n    text: job._source || \"LinkedIn\"\n  },\n  timestamp: new Date().toISOString()\n}));\n\nconst payload = {\n  content: `🔥 **${jobs.length} New Job${jobs.length > 1 ? 's' : ''} Found!**`,\n  embeds: embeds\n};\n\nconsole.log(`Created Discord payload for ${jobs.length} jobs (showing ${embeds.length})`);\n\nreturn [{ json: payload }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        1840
+      ],
+      "id": "3a405865-0d8a-46de-a9cd-9f2859f3d3d8",
+      "name": "Discord  Payload2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Separate Notion (existing) and new jobs\nconst existing = items.map(i => i.json).filter(j => !j.timestamp_added && j.job_id);\nconst newJobs = items.map(i => i.json).filter(j => j.timestamp_added && j.job_id);\n\nconsole.log(`📊 Existing in Notion: ${existing.length}`);\nconsole.log(`📊 Newly scraped: ${newJobs.length}`);\n\n// --- Normalize job_id helper ---\nconst normalizeId = id => id?.toString().trim().replace(/\\D/g, '') || '';\n\n// --- Build set of existing job IDs ---\nconst existingIds = new Set(existing.map(j => normalizeId(j.job_id)).filter(Boolean));\n\n// --- Filter only new unique jobs by job_id ---\nconst seenIds = new Set();\nconst unique = [];\nlet duplicates = 0;\n\nfor (const job of newJobs) {\n  const id = normalizeId(job.job_id);\n  if (!id) continue;\n\n  if (existingIds.has(id) || seenIds.has(id)) {\n    duplicates++;\n    continue;\n  }\n\n  seenIds.add(id);\n  unique.push({ json: job });\n}\n\nconsole.log(`✅ Unique jobs: ${unique.length}`);\nconsole.log(`❌ Duplicates skipped: ${duplicates}`);\n\nreturn unique;\n"
+      },
+      "id": "a01d59f7-1077-49be-9809-ad3cb993c029",
+      "name": "Filter New Jobs1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1904
+      ],
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "retryOnFail": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "job_id",
+        "joinMode": "keepNonMatches",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        128,
+        1904
+      ],
+      "id": "5a574465-a74d-46ba-9292-cda9b305239a",
+      "name": "Merge3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -320,
+        1904
+      ],
+      "id": "c94094a9-fe90-45f6-9798-409e492540de",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get plain text from HTTP Request node (stored in json.string)\nconst text = $input.first().json.string;\n\nif (!text || typeof text !== \"string\") {\n  throw new Error(\"❌ README text not found. Check that HTTP Request Response Format = String.\");\n}\n\nconst lines = text.split(/\\r?\\n/);\n\n// Filter job table rows\nconst tableLines = lines.filter(l =>\n  l.includes(\"|\") &&\n  l.includes(\"<a href=\") &&\n  !l.startsWith(\"| ---\") &&\n  !l.startsWith(\"| Company\")\n);\n\nconst jobs = [];\nconst now = new Date();\nconst oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);\n\nfor (const line of tableLines) {\n  const parts = line.split(\"|\").map(p => p.trim());\n\n  const company = (parts[1] || \"\").replace(/\\*\\*/g, \"\");\n  const role = parts[2] || \"\";\n  const location = (parts[3] || \"\").replace(/<\\/?br>/gi, \" | \").trim();\n\n  // Extract actual job URL\n  const linkMatch = (parts[4] || \"\").match(/<a\\s+href=\"([^\"]+)\"/i);\n  const link = linkMatch ? linkMatch[1].trim() : \"\";\n\n  const datePosted = (parts[5] || \"\").trim();\n\n  // Try to parse the datePosted string\n  let postedDate = null;\n  if (datePosted) {\n    // Common formats in GitHub README job boards:\n    // e.g., \"2025-11-08\", \"Nov 8, 2025\", \"11/08/2025\", etc.\n    postedDate = new Date(datePosted);\n  }\n\n  // Keep only if the posting date is within last 24 hours\n  if (postedDate && !isNaN(postedDate.getTime()) && postedDate >= oneDayAgo) {\n    jobs.push({\n      json: { company, role, location, link, date_posted: datePosted }\n    });\n  }\n}\n\nconsole.log(`✅ Extracted ${jobs.length} jobs from GitHub README (last 24 hours only)`);\nreturn jobs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        2176
+      ],
+      "id": "87c3b944-3bd4-4094-a136-93c0587f811c",
+      "name": "Parse Git node1",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/vanshb03/New-Grad-2026/dev/README.md\n",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "string"
+            }
+          }
+        }
+      },
+      "id": "66dbc39e-0db9-4feb-b250-716b425d4918",
+      "name": "Fetch DevOps Jobs Github1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -752,
+        2160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "Notion_Database_ID",
+          "mode": "list",
+          "cachedResultName": "N8N-Jobs",
+          "cachedResultUrl": "https://www.notion.so/Notion_Database_ID"
+        },
+        "returnAll": true,
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        2128
+      ],
+      "id": "4650c449-4ad6-4546-9f6d-fe4afa69c29f",
+      "name": "Get many database pages1",
+      "credentials": {
+        "notionApi": {
+          "id": "RhbCoFRPxgKwt3Jd",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "Notion_Databse_ID",
+          "mode": "list",
+          "cachedResultName": "N8N-Jobs",
+          "cachedResultUrl": "https://www.notion.so/Notion_Databse_ID"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "job_id|title",
+              "title": "={{ $json.job_id }}"
+            },
+            {
+              "key": "job_url|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.job_url }}"
+            },
+            {
+              "key": "job_title|rich_text",
+              "textContent": "={{ $json.job_title }}"
+            },
+            {
+              "key": "company_name|rich_text",
+              "textContent": "={{ $json.company_name }}"
+            },
+            {
+              "key": "location_full|rich_text",
+              "textContent": "={{ $json.location_full }}"
+            },
+            {
+              "key": "location_city|rich_text",
+              "textContent": "={{ $json.location_city }}"
+            },
+            {
+              "key": "location_state|rich_text",
+              "textContent": "={{ $json.location_state }}"
+            },
+            {
+              "key": "employment_type|rich_text",
+              "textContent": "={{ $json.employment_type }}"
+            },
+            {
+              "key": "remote_option|rich_text",
+              "textContent": "={{ $json.remote_option }}"
+            },
+            {
+              "key": "_source|rich_text",
+              "textContent": "={{ $json._source }}"
+            },
+            {
+              "key": "timestamp_added|date",
+              "date": "={{ $json.timestamp_added }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        2064
+      ],
+      "id": "7ee12a98-367f-49d2-883d-ed6e20aa69ee",
+      "name": "Create a database page1",
+      "retryOnFail": true,
+      "waitBetweenTries": 500,
+      "credentials": {
+        "notionApi": {
+          "id": "RhbCoFRPxgKwt3Jd",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten Notion structure into simple key:value pairs\nconst out = [];\n\nfor (const item of $input.all()) {\n  const p = item.json.properties;\n  if (!p) continue;\n\n  out.push({\n    json: {\n      job_id: p.job_id?.title?.[0]?.plain_text || \"\",\n      job_url: p.job_url?.url || \"\",\n      job_title: p.job_title?.rich_text?.[0]?.plain_text || \"\",\n      company_name: p.company_name?.rich_text?.[0]?.plain_text || \"\",\n      location_full: p.location_full?.rich_text?.[0]?.plain_text || \"\",\n      location_city: p.location_city?.rich_text?.[0]?.plain_text || \"\",\n      location_state: p.location_state?.rich_text?.[0]?.plain_text || \"\",\n      employment_type: p.employment_type?.rich_text?.[0]?.plain_text || \"\",\n      remote_option: p.remote_option?.rich_text?.[0]?.plain_text || \"\",\n      _source: p._source?.rich_text?.[0]?.plain_text || \"\",\n      // Mark as from Notion\n      from_notion: true,\n      // Keep original timestamp for reference\n      original_timestamp: p.timestamp_added?.date?.start || \"\"\n    }\n  });\n}\n\nconsole.log(`✅ Simplified ${out.length} Notion records`);\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        2128
+      ],
+      "id": "86acdf03-2b6c-4516-af6e-bfa14e790f17",
+      "name": "Notion Filter1"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "guildId": {
+          "__rl": true,
+          "value": "Discord_Channel_ID",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://discord.com/channels/Discord_Channel_ID"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "Discord_Channel_ID",
+          "mode": "list",
+          "cachedResultName": "jobs",
+          "cachedResultUrl": "https://discord.com/channels/Discord_Channel_ID"
+        },
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        1888
+      ],
+      "id": "11b0195f-273e-45da-8d3e-8a85ee5a7bf3",
+      "name": "Get many messages",
+      "webhookId": "Discord_Webhook_ID",
+      "credentials": {
+        "discordBotApi": {
+          "id": "Discord_Credential_ID",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the latest message item directly\nconst msg = $input.first()?.json;\n\nif (!msg) {\n  console.log('⚠️ No messages received from Discord.');\n  return [];\n}\n\n// Debug log\nconsole.log(`📩 Message detected: ${msg.content} from ${msg.author?.username}`);\n\n// Normalize content\nconst content = (msg.content || '').trim().toLowerCase();\n\n// Trigger keywords\nif (content === '!fetch jobs' || content === 'fetch jobs' || content.includes('find jobs')) {\n  console.log(`✅ Command detected: ${content}`);\n  return [{ json: { trigger: true, user: msg.author?.username, content } }];\n}\n\n// If no trigger, skip\nconsole.log(`⏸️ Ignored message: \"${content}\"`);\nreturn [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        1888
+      ],
+      "id": "87f91e6c-c4a2-4064-a0bd-dc366ac67a1b",
+      "name": "Discord Code1",
+      "alwaysOutputData": false
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (30s)2": {
+      "main": [
+        [
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Jobs2": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Pagination Offsets4": {
+      "main": [
+        [
+          {
+            "node": "Fetch Backend Jobs (LinkedIn)4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch DevOps Jobs (LinkedIn)4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch DevOps Jobs Github1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Backend Jobs (LinkedIn)4": {
+      "main": [
+        [
+          {
+            "node": "Parse Backend HTML3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch DevOps Jobs (LinkedIn)4": {
+      "main": [
+        [
+          {
+            "node": "Parse DevOps HTML3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Backend HTML3": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse DevOps HTML3": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Discord  Payload2": {
+      "main": [
+        [
+          {
+            "node": "Notify Discord (Webhook)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Jobs1": {
+      "main": [
+        [
+          {
+            "node": "Discord  Payload2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Filter New Jobs1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "Normalize Jobs2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Git node1": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Fetch DevOps Jobs Github1": {
+      "main": [
+        [
+          {
+            "node": "Parse Git node1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages1": {
+      "main": [
+        [
+          {
+            "node": "Notion Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Filter1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Discord Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord Code1": {
+      "main": [
+        [
+          {
+            "node": "Create Pagination Offsets4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Schedule Trigger (30s)2": [
+      {
+        "name": "First item",
+        "code": 1
+      },
+      {
+        "name": "Second item",
+        "code": 2
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "REDACTED"
+  }
+}
