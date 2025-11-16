@@ -2,6 +2,35 @@
   "nodes": [
     {
       "parameters": {
+        "content": "This workflow automatically monitors the BBC News homepage for any content changes and sends you an instant alert through Telegram whenever updates occur.\nIt is ideal for tracking breaking news, political updates, or changes on the BBC front page in real time.\n\n🚀 Features\n🔄 1. Auto-Monitor BBC News Homepage\n\nThe workflow fetches the HTML content of:\n\nhttps://www.bbc.com/news\n\n\nevery minute using the Cron trigger.\n\n🧠 2. Smart HTML Change Detection\n\nThe workflow compares:\n\nPreviously saved HTML\n\nNewly fetched HTML\n\nTo avoid false alarms, it cleans both HTML blocks by:\n\n✔ Removing whitespace\n✔ Removing <script> tags\n✔ Ignoring dynamic ad-timers or JS-generated elements\n\nThis ensures alerts only trigger when the real, visible content changes.\n\n💬 3. Instant Telegram Alerts\n\nWhen the workflow detects a change, it sends a Telegram message:\n\nChanges Detected\n\n\nYou can customize this message as needed.\n\n💾 4. Saves Latest HTML Snapshot\n\nAfter sending the alert, the automation updates the stored HTML file:\n\nReads previous file from: HTML_File_Path\n\nWrites new HTML to: HTML_FilePath\n\n(Replace these placeholders with your exact path.)\n\n🧱 Workflow Overview\nCron (every minute)\n     ↓\nFetch New HTML (BBC News)\n     ↓\nRead Old HTML (local file)\n     ↓\nCompare (clean + diff)\n     ↓\nIf Changed?\n     ├── Yes → Send Telegram\n     └── Yes → Update Old HTML\n\n📌 Node Descriptions\nNode Name\tPurpose\nCron\tTriggers workflow every minute\nFetch New HTML\tDownloads latest BBC News homepage\nRead Old HTML\tLoads previously saved HTML file\nCompare\tCleans + compares old and new HTML\nIf Changed\tDecides whether a Telegram alert should be sent\nSend Telegram\tSends the “Changes Detected” message\nUpdate Old HTML\tSaves the latest HTML to disk\n⚙️ Setup Instructions\n1. Prepare Local File Storage\n\nReplace these placeholders in the workflow:\n\nHTML_File_Path\nHTML_FilePath\n\n\nwith the actual full path where you want to store the HTML snapshot, such as:\n\nC:\\Users\\yourname\\N8N_files\\BBC_News.html\n\n\nCreate the folder manually if it does not exist.\n\n2. Initialize the First HTML File\n\nBefore running the workflow:\n\nCreate an empty file at your chosen path (e.g. BBC_News.html)\n\nSave it so that Read Old HTML can access it the first time.\n\n3. Configure Telegram\n\nInside the Send Telegram node:\n\nField\tReplace With\nchatId\tYour Telegram chat ID\ncredentials\tYour Telegram Bot token\n\nIf you don’t have a bot:\n\nOpen Telegram\n\nSearch @BotFather\n\nRun /newbot and create a bot\n\nCopy token\n\nAdd token to n8n Telegram API Credential\n\nSend a message to your bot\n\nUse getUpdates API or a helper bot (e.g. @chatIDrobot) to get chat ID\n\n4. Import Workflow to n8n\n\nOpen n8n\n\nGo to Import → Paste JSON\n\nSave and activate workflow\n\nYou're ready to monitor BBC News automatically 🚀\n\n🐞 Troubleshooting\n❌ Error: File could not be accessed\n\nCheck:\n\nDid you create the folder?\n\nDid you create the initial empty file?\n\nDoes n8n have permission?\n\n❌ No message arriving on Telegram\n\nCheck:\n\nTelegram bot token is correct\n\nYou have sent at least one message to the bot\n\nChat ID is correct\n\nWorkflow is active in n8n\n\n❌ Workflow always shows changed = true\n\nBBC updates dynamic content every second.\n\nFix: Add more cleaning steps (we can tune script if needed).\n",
+        "height": 2816,
+        "width": 944
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -6448,
+        -528
+      ],
+      "typeVersion": 1,
+      "id": "16691e86-bb7e-43e9-b5a4-1179308485fe",
+      "name": "Sticky Note1"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+  }
+}
+
+
+
+
+{
+  "nodes": [
+    {
+      "parameters": {
         "triggerTimes": {
           "item": [
             {
