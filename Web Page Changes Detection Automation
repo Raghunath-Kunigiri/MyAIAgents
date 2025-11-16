@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "url": "https://www.andhrajyothy.com/",
+        "url": "https://www.bbc.com/news",
         "options": {}
       },
       "id": "7b2c517e-79e9-4d75-adb8-dc4eb6ec8b2d",
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "filePath": "C:\\Users\\kunig\\N8N_files\\News.html"
+        "filePath": "HTML_File_Path"
       },
       "id": "40629902-ea2f-425d-b17d-94845f8bf2ee",
       "name": "Read Old HTML",
@@ -80,8 +80,8 @@
     },
     {
       "parameters": {
-        "chatId": "8399076693",
-        "text": "IndiaToday content changed! Check the site.",
+        "chatId": "Telegram_Chat_ID",
+        "text": "Changes Detected",
         "additionalFields": {}
       },
       "id": "d3c19b0f-0566-4a2d-948d-73b1323b6546",
@@ -95,7 +95,7 @@
       "webhookId": "7c4f117b-009b-442f-8bd1-e7a32862d55f",
       "credentials": {
         "telegramApi": {
-          "id": "NvXAcLdMvVjrAc1I",
+          "id": "Telegram_API",
           "name": "Telegram News"
         }
       }
@@ -103,7 +103,7 @@
     {
       "parameters": {
         "operation": "write",
-        "fileName": "C:\\Users\\kunig\\N8N_files\\News.html",
+        "fileName": "HTML_FilePath",
         "options": {}
       },
       "id": "4a75b474-31a0-4357-9efc-e445cc2a3dfa",
@@ -183,6 +183,6 @@
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+    "instanceId": "N8N_Instance_ID"
   }
 }
