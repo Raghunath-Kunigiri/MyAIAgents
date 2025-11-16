@@ -89,3 +89,33 @@ Compare SHAs
                                 │
                                 ▼
                        Update lastCommit.txt
+Extending the Workflow
+
+You can easily enhance this workflow to:
+
+Track Pull Requests
+
+Notify on merged PRs
+
+Monitor repo branches
+
+Track file-specific changes (e.g., /src only)
+
+Push alerts to Slack, Teams, Telegram
+
+Run CI/CD triggers
+
+🤝 Contributing & Collaboration
+
+If you're building:
+
+AI Agents
+
+Automation Tools
+
+DevOps Workflows
+
+Team Productivity Bots
+
+…I’d be happy to collaborate.
+Feel free to open an issue or reach out!
