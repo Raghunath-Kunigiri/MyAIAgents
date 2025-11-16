@@ -1,0 +1,288 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "content": "GitHub Commit Monitoring Workflow – Complete Node Documentation\n(Safe Version — No sensitive data, suitable for GitHub repository)\n\nThis workflow automatically checks a GitHub repository every minute and sends commit notifications to Discord, Slack, and Microsoft Teams.\nIt stores the last seen commit locally to prevent duplicate notifications.",
+        "width": 784
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -496,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "1752bbc5-008c-4940-bdde-fdc6565ee31f",
+      "name": "Sticky Note"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+  }
+}
+
+
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "c49f57b2-178e-4052-95d2-c97151a1aa11",
+      "name": "Check Every Minute",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "C:\\Users\\N8N_files\\lastCommit.txt"
+      },
+      "id": "8555f296-ab4e-4c63-9bf6-d1e3dcba2a0e",
+      "name": "Read Last Commit",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        0,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/",
+        "options": {}
+      },
+      "id": "45efe4d9-01ec-4754-8151-f938f285f243",
+      "name": "Fetch Latest Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -208,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract latest commit from GitHub\nlet latestCommit;\n\nif (Array.isArray($json) && $json.length > 0) {\n  latestCommit = $json[0];\n} else if ($json?.sha) {\n  latestCommit = $json;\n} else {\n  throw new Error(\"❌ No commit found\");\n}\n\n// latest commit SHA\nconst latestSha = latestCommit.sha;\n\n// Read old SHA\nlet oldSha = \"\";\ntry {\n  const raw = $('Read Last Commit').item.binary.data.data;\n  oldSha = Buffer.from(raw, \"base64\").toString(\"utf8\").trim();\n} catch {\n  oldSha = \"\";\n}\n\n// Compare\nconst changed = latestSha !== oldSha;\n\n// Create binary to write\nconst newBinary = Buffer.from(latestSha, \"utf8\").toString(\"base64\");\n\n// Always return BOTH JSON + BINARY\nreturn [\n  {\n    json: {\n      changed,\n      latestSha,\n      oldSha,\n      commit: latestCommit\n    },\n    binary: {\n      data: {\n        data: newBinary,\n        mimeType: \"text/plain\",\n        fileName: \"lastCommit.txt\"\n      }\n    }\n  }\n];\n"
+      },
+      "id": "b95fb107-bec1-46a8-a925-a5f06c20040d",
+      "name": "Compare Commits",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.commit.commit.verification.verified }}"
+            }
+          ]
+        }
+      },
+      "id": "126f12ae-9553-433c-b348-dc98bcf775d6",
+      "name": "If New Commit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        464,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json.commit;\n\nreturn {\n  content: \"📌 **New Commit Detected!**\",\n  embeds: [\n    {\n      title: `Commit: ${data.sha.substring(0,7)}`,\n      url: data.html_url,\n      description: data.commit.message,\n      color: 15844367,\n      author: {\n        name: data.commit.author.name,\n        icon_url: data.author?.avatar_url || \"\"\n      },\n      fields: [\n        { name: \"SHA\", value: data.sha },\n        { name: \"Date\", value: data.commit.author.date }\n      ],\n      timestamp: new Date().toISOString()\n    }\n  ]\n};\n"
+      },
+      "id": "aa518253-534b-4afb-a604-002c666f5733",
+      "name": "Build Discord Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "C:\\Users\\N8N_files\\lastCommit.txt",
+        "options": {}
+      },
+      "id": "8a668251-0f15-4c10-bf42-47564f081d95",
+      "name": "Update Last Commit File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        704,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "b0f4b7fd-7604-492e-87cb-87225f2dcf01",
+      "name": "Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discordapp.com/api/webhooks/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "84191b74-e66f-4e34-8160-b6a83212b802",
+      "name": "Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        -384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discordapp.com/api/webhooks/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "a32f0410-e0d6-43b9-8955-e7d12df9a801",
+      "name": "Teams",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        -32
+      ]
+    }
+  ],
+  "connections": {
+    "Check Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Fetch Latest Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Commit": {
+      "main": [
+        [
+          {
+            "node": "Compare Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest Commit": {
+      "main": [
+        [
+          {
+            "node": "Read Last Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Commits": {
+      "main": [
+        [
+          {
+            "node": "If New Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If New Commit": {
+      "main": [
+        [
+          {
+            "node": "Build Discord Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Last Commit File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Discord Message": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Teams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord": {
+      "main": [
+        []
+      ]
+    },
+    "Teams": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+  }
+}
