@@ -2,6 +2,32 @@
   "nodes": [
     {
       "parameters": {
+        "content": "🔄 Automated Job Aggregator Workflow (LinkedIn + GitHub + Notion + Discord)\n\nThis repository contains an n8n workflow that automatically fetches the latest tech job postings from multiple sources, processes them, stores them in Notion, and optionally sends real-time updates to Discord.\n\nThis system is fully automated and can also be triggered manually by Discord commands.\n\n🚀 Features\n🔍 1. Multi-Source Job Scraping\n\nThe workflow collects jobs from:\n\nLinkedIn (DevOps roles)\n\nLinkedIn (Backend roles)\n\nGitHub Job Boards (daily job posting lists)\n\n🧠 2. Smart Job Normalization\n\nThe workflow:\n\nCleans and normalizes job data\n\nExtracts job ID, title, company, location, and posting date\n\nFixes incomplete LinkedIn URLs\n\nStandardizes city/state data\n\n➕ 3. Deduplication Against Notion\n\nBefore inserting new jobs, the workflow:\n\nRetrieves all existing records from Notion\n\nCompares job IDs\n\nInserts only new unique jobs\n\n📦 4. Notion Database Integration\n\nEvery new job is inserted into a Notion database using:\n\nTitle fields\n\nRich text\n\nURL fields\n\nTimestamp fields\n\nTags & classify source (Backend, DevOps, GitHub)\n\n🔔 5. Discord Notifications\n\nWhen new jobs are found:\n\nA Discord webhook sends a structured embed message\n\nShows company, role, location, employment type, remote option\n\nIncludes job URL and posting timestamp\n\n💬 6. Discord Command Trigger\n\nUsers can manually trigger a fetch by sending messages like:\n\n!fetch jobs\nfetch jobs\nfind jobs\n\n🕒 7. Runs Every 1 Minute\n\nThe Schedule Trigger keeps the workflow running continuously.\n\n🧱 Workflow Architecture\nDiscord Message Listener → Command Parser\n        ↓ (optional trigger)\n Schedule Trigger (1 min)\n        ↓\n Pagination Builder → LinkedIn HTTP Requests (Backend + DevOps)\n        ↓\n HTML Parser (extract title, company, location, URL)\n        ↓\n GitHub Scraper (New-Grad job boards)\n        ↓\n Data Normalizer\n        ↓\n Existing Jobs from Notion\n        ↓\n Merge & Deduplicate\n        ↓\n ├─→ Insert New Jobs Into Notion\n └─→ Create Discord Embed Payload → Send to Discord\n\n🛠️ Setup Instructions\n1️⃣ Install n8n\n\nSelf-hosted or Cloud.\n\n2️⃣ Add Required Credentials\n🔹 LinkedIn OAuth\n\nAdd a credential named:\nLinkedIn_Credential_ID\n\n🔹 Notion API\n\nAdd a credential named:\nNotion Account\n\nGrant access to your Notion database.\n\n🔹 Discord Bot Credential\n\nAdd:\nDiscord_Credential_ID\n\nAlso set:\n\nGuild ID (server ID)\n\nChannel ID\n\n(Optional) Webhook URL\n\n🔹 Notion Database IDs\n\nReplace placeholders:\n\nNotion_Database_ID\nNotion_Databse_ID\n\n\nwith your actual database ID.\n\n🧩 Required Node Types\nNode\tPurpose\nSchedule Trigger\tRuns workflow every minute\nHTTP Request\tFetch LinkedIn + GitHub job data\nHTML Extract\tParse job cards from HTML\nNotion\tFetch + Insert job entries\nCode Nodes\tNormalize, dedupe, convert, and build payloads\nDiscord Bot API\tListen to messages & handle triggers\nDiscord Webhook\tSend job notifications\n📬 Discord Notifications Example\n\nJobs are sent as embeds such as:\n\n🔥 6 New Jobs Found!\n\nField\tValue\n🏢 Company\tGoogle\n📍 Location\tNew York, USA\n💼 Type\tFull-time\n🏠 Remote\tHybrid\n🔗 URL\tlinkedin.com/jobs/...\n✔️ Security Notes\n\nThis version of the workflow includes:\n\n🔒 No API keys\n\n🔒 No OAuth secrets\n\n🔒 No personal Notion URLs\n\n🔒 No Discord webhook URLs\n\n🔒 No credential IDs\n\n🔒 No personal directory paths\n\nSafe to publish publicly.\n\n📎 Importing the Workflow\n\nCopy the JSON in this repository\n\nGo to n8n → Import Workflow → Paste JSON\n\nReplace placeholder IDs with your actual credential and database IDs\n\nStart your workflow! 🚀"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2400,
+        1728
+      ],
+      "typeVersion": 1,
+      "id": "b1e20dba-2f07-45c7-800b-e1622a7d1ebe",
+      "name": "Sticky Note1"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+  }
+}
+
+
+
+{
+  "nodes": [
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
