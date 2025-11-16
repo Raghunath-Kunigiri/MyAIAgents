@@ -1,0 +1,188 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "af6591b1-be28-4657-aa8d-91d72bf6f628",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.andhrajyothy.com/",
+        "options": {}
+      },
+      "id": "7b2c517e-79e9-4d75-adb8-dc4eb6ec8b2d",
+      "name": "Fetch New HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -288,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "C:\\Users\\kunig\\N8N_files\\News.html"
+      },
+      "id": "40629902-ea2f-425d-b17d-94845f8bf2ee",
+      "name": "Read Old HTML",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// READ OLD HTML\nlet oldHtml = \"\";\ntry {\n  const bin = $json.data;\n  if (bin?.data) oldHtml = Buffer.from(bin.data, \"base64\").toString(\"utf8\");\n} catch { oldHtml = \"\"; }\n\n// NEW HTML\nconst newHtml = $('Fetch New HTML').item.json.data || \"\";\n\n// CLEAN FUNCTION\nconst clean = html => html.replace(/\\s+/g, \"\").replace(/<script[\\s\\S]*?<\\/script>/gi, \"\");\n\n// COMPARE\nlet changed = clean(oldHtml) !== clean(newHtml);\n\n// ALWAYS RETURN BOTH JSON + BINARY\nreturn [\n{\n  json: { changed },\n  binary: {\n    data: {\n      data: Buffer.from(newHtml, \"utf8\").toString(\"base64\"),\n      mimeType: \"text/html\",\n      fileName: \"News.html\"\n    }\n  }\n}\n];\n"
+      },
+      "id": "d4817337-85f9-466e-a4f2-d5800a28b14f",
+      "name": "Compare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"changed\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "2e381969-d150-4916-beb4-a5e95e081171",
+      "name": "If Changed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        352,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8399076693",
+        "text": "IndiaToday content changed! Check the site.",
+        "additionalFields": {}
+      },
+      "id": "d3c19b0f-0566-4a2d-948d-73b1323b6546",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        560,
+        624
+      ],
+      "webhookId": "7c4f117b-009b-442f-8bd1-e7a32862d55f",
+      "credentials": {
+        "telegramApi": {
+          "id": "NvXAcLdMvVjrAc1I",
+          "name": "Telegram News"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\Users\\kunig\\N8N_files\\News.html",
+        "options": {}
+      },
+      "id": "4a75b474-31a0-4357-9efc-e445cc2a3dfa",
+      "name": "Update Old HTML",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        560,
+        800
+      ]
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "Fetch New HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch New HTML": {
+      "main": [
+        [
+          {
+            "node": "Read Old HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Old HTML": {
+      "main": [
+        [
+          {
+            "node": "Compare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare": {
+      "main": [
+        [
+          {
+            "node": "If Changed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Changed": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Old HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
+  }
+}
