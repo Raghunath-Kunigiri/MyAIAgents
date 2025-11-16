@@ -2,13 +2,14 @@
   "nodes": [
     {
       "parameters": {
-        "content": "GitHub Commit Monitoring Workflow – Complete Node Documentation\n(Safe Version — No sensitive data, suitable for GitHub repository)\n\nThis workflow automatically checks a GitHub repository every minute and sends commit notifications to Discord, Slack, and Microsoft Teams.\nIt stores the last seen commit locally to prevent duplicate notifications.",
-        "width": 784
+        "content": "GitHub Commit Monitor Automation\nReal-time commit tracking using GitHub API + n8n + Discord/Slack/Teams/Telegram\n🚀 Overview\n\nAt my workplace, we often struggled with questions like:\n\nWho pushed the latest code?\n\nWhen was it pushed?\n\nWhat exactly changed?\n\nTo solve this, I built an automated workflow using n8n, GitHub API, and webhooks, which sends instant commit notifications to Discord (and can also work with Slack, Teams, Email, Telegram, etc.).\n\nThis automation provides every team member with real-time, structured commit visibility without manual checking.\n\n✅ Features\n🔍 Intelligent Commit Detection\n\nFetches the latest commit via GitHub API\n\nCompares with previously stored commit SHA\n\nSends notifications only when a new commit is detected\n\n📢 Multi-Platform Notifications\n\nSupports:\n\nDiscord (enabled by default)\n\nSlack\n\nMicrosoft Teams\n\nTelegram\n\nEmail\n\nAny Webhook-compatible service\n\n🧾 Notification Includes:\n\nCommit author\n\nTimestamp\n\nCommit message\n\nSHA\n\nDirect link to commit\n\n(Optional) Changed files\n\n💾 Persistent State\n\nStores SHA in lastCommit.txt\n\nPrevents duplicate notifications\n\n🛠️ Technologies Used\nTechnology\tPurpose\nn8n\tWorkflow Automation\nGitHub API\tCommit Data\nDiscord Webhook\tNotifications\nJavaScript\tLogic inside n8n Code Nodes\nLocal Storage\tTrack last commit\n📂 Workflow Structure\nCron (every minute)\n        │\n        ▼\nFetch Latest Commit (GitHub API)\n        │\n        ▼\nRead Last Commit (local file)\n        │\n        ▼\nCompare SHAs\n   ┌─────────────┴────────────┐\n   │                           │\n SAME COMMIT            NEW COMMIT FOUND\n   │                           │\n   ▼                           ▼\n Stop Workflow         Build Discord Message\n                                │\n                                ▼\n                       Send Discord Webhook\n                                │\n                                ▼\n                       Update lastCommit.txt\nExtending the Workflow\n\nYou can easily enhance this workflow to:\n\nTrack Pull Requests\n\nNotify on merged PRs\n\nMonitor repo branches\n\nTrack file-specific changes (e.g., /src only)\n\nPush alerts to Slack, Teams, Telegram\n\nRun CI/CD triggers\n\n🤝 Contributing & Collaboration\n\nIf you're building:\n\nAI Agents\n\nAutomation Tools\n\nDevOps Workflows\n\nTeam Productivity Bots\n\n…I’d be happy to collaborate.\nFeel free to open an issue or reach out!",
+        "height": 2304,
+        "width": 2208
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        -496,
-        -208
+        -576,
+        320
       ],
       "typeVersion": 1,
       "id": "1752bbc5-008c-4940-bdde-fdc6565ee31f",
@@ -22,7 +23,6 @@
     "instanceId": "f85f09ec96677431a5d4607182b3bdbff4c170eb8a3fd8e06b807f9d73c55362"
   }
 }
-
 
 {
   "nodes": [
