@@ -1489,6 +1489,25 @@ def index():
     """Serve the main HTML page"""
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/resume')
+@app.route('/job_input_form.html')
+@app.route('/Resume_Generator/job_input_form.html')
+def resume_generator():
+    """Serve the resume generator HTML form"""
+    import os
+    jobs_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html_path = os.path.join(jobs_dir, 'Resume_Generator', 'job_input_form.html')
+    
+    try:
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        from flask import Response
+        return Response(html_content, mimetype='text/html')
+    except FileNotFoundError:
+        return "Resume generator file not found", 404
+    except Exception as e:
+        return f"Error loading resume generator: {str(e)}", 500
+
 @app.route('/api/jobs')
 def api_jobs():
     """API endpoint to get all jobs"""
