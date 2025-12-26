@@ -12,20 +12,16 @@
       "dest": "api/index.py"
     },
     {
-      "src": "/resume",
+      "src": "/$",
       "dest": "api/index.py"
+    },
+    {
+      "src": "/resume",
+      "dest": "/Resume_Generator/job_input_form.html"
     },
     {
       "src": "/job_input_form.html",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/Resume_Generator/job_input_form.html",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "api/index.py"
+      "dest": "/Resume_Generator/job_input_form.html"
     }
   ]
 }
