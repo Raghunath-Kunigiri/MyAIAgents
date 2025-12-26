@@ -207,5 +207,11 @@ async def cleanup_duplicates():
             client.close()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Export handler for Vercel
-handler = app
+# Export handler for Vercel using Mangum
+# FastAPI is ASGI, but Vercel needs a Lambda-compatible handler
+try:
+    from mangum import Mangum
+    handler = Mangum(app)
+except ImportError:
+    # Fallback if mangum is not available
+    handler = app
