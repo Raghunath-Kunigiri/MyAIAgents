@@ -1,3 +1,6 @@
+# Import traceback at module level to ensure it's always available
+import traceback
+
 # Ensure handler is always defined, even if imports fail
 handler = None
 
@@ -39,12 +42,10 @@ def create_error_handler(error_msg, error_type="Unknown", traceback_str="", debu
 
 # Initialize error tracking
 error_details = []
-import_error = None
 
 try:
     import sys
     import os
-    import traceback
     
     # In Vercel, the api/ directory is the function root
     # We've copied jobs_viewer_app.py into the api/ directory for direct import
@@ -73,8 +74,7 @@ try:
     handler = app
     
 except Exception as e:
-    import_error = e
-    error_traceback = traceback.format_exc() if 'traceback' in dir() else str(e)
+    error_traceback = traceback.format_exc()
     error_details_html = '\n'.join(error_details) if error_details else '<li>No debug info collected</li>'
     
     handler = create_error_handler(
