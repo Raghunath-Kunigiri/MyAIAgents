@@ -1495,18 +1495,36 @@ def index():
 def resume_generator():
     """Serve the resume generator HTML form"""
     import os
-    jobs_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    html_path = os.path.join(jobs_dir, 'Resume_Generator', 'job_input_form.html')
+    from flask import Response
     
-    try:
-        with open(html_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        from flask import Response
+    # Try multiple path resolutions for different environments
+    possible_paths = [
+        # Vercel serverless function path (from api/index.py)
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Resume_Generator', 'job_input_form.html'),
+        # Direct relative path
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Resume_Generator', 'job_input_form.html'),
+        # Absolute path resolution
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'Resume_Generator', 'job_input_form.html')),
+    ]
+    
+    html_content = None
+    last_error = None
+    
+    for html_path in possible_paths:
+        try:
+            if os.path.exists(html_path):
+                with open(html_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                break
+        except Exception as e:
+            last_error = str(e)
+            continue
+    
+    if html_content:
         return Response(html_content, mimetype='text/html')
-    except FileNotFoundError:
-        return "Resume generator file not found", 404
-    except Exception as e:
-        return f"Error loading resume generator: {str(e)}", 500
+    else:
+        error_msg = f"Resume generator file not found. Tried paths: {possible_paths}. Last error: {last_error}"
+        return error_msg, 404
 
 @app.route('/api/jobs')
 def api_jobs():
