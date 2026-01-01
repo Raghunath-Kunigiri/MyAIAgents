@@ -279,7 +279,19 @@ async def cleanup_duplicates():
 # FastAPI is ASGI, but Vercel needs a Lambda-compatible handler
 try:
     from mangum import Mangum
-    handler = Mangum(app)
+    mangum_handler = Mangum(app)
+    
+    # Wrap the handler to catch any exceptions and return JSON
+    def handler(event, context):
+        try:
+            return mangum_handler(event, context)
+        except Exception as e:
+            import json
+            return {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"success": False, "error": str(e)})
+            }
 except ImportError:
     # Fallback if mangum is not available
     handler = app
