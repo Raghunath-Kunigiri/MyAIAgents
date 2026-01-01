@@ -36,6 +36,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global exception handler to ensure all errors return JSON
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    """Handle HTTP exceptions and return JSON"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "error": str(exc.detail)}
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """Handle validation errors and return JSON"""
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "error": str(exc)}
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Ensure all exceptions return JSON responses"""
+    import traceback
+    error_details = str(exc)
+    # Only include traceback in non-production for security
+    if os.environ.get("VERCEL_ENV") != "production":
+        error_details += f"\n{traceback.format_exc()}"
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": error_details}
+    )
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Serve the main HTML page"""
@@ -72,7 +105,14 @@ async def resume_generator():
 async def api_jobs():
     """API endpoint to get all jobs"""
     try:
-        jobs, error = get_all_jobs()
+        # Safely call get_all_jobs with error handling
+        try:
+            jobs, error = get_all_jobs()
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": f"Error calling get_all_jobs: {str(e)}"}
+            )
         
         if error:
             return JSONResponse(
@@ -86,9 +126,13 @@ async def api_jobs():
             "jobs": jobs or []
         })
     except Exception as e:
+        import traceback
+        error_msg = str(e)
+        if os.environ.get("VERCEL_ENV") != "production":
+            error_msg += f"\n{traceback.format_exc()}"
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": str(e)}
+            content={"success": False, "error": error_msg}
         )
 
 @app.get("/api/stats")
