@@ -21,8 +21,17 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 from bson import ObjectId
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
+import requests
+import gridfs
+import io
+import mimetypes
+from flask import send_file, request, redirect, url_for, flash, make_response
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from email_validator import validate_email, EmailNotValidError
+
 
 # MongoDB Configuration
 # Update these values to match your MongoDB setup
@@ -55,6 +64,40 @@ class CustomJSONProvider(DefaultJSONProvider):
         return super().default(obj)
 
 app.json = CustomJSONProvider(app)
+app.secret_key = "dev-secret-key-change-in-prod"  # Static key for stability
+
+# Flask-Login Configuration
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# User Model
+class User(UserMixin):
+    def __init__(self, user_doc):
+        self.id = str(user_doc['_id'])
+        self.email = user_doc['email']
+        self.password_hash = user_doc['password_hash']
+        self.name = user_doc.get('name', 'User')
+
+@login_manager.user_loader
+def load_user(user_id):
+    # print(f"DEBUG: load_user called with {user_id}")
+    client, db, collection, fs, error = get_db_connection()
+    if not client: 
+        print("DEBUG: load_user - No DB connection")
+        return None
+    
+    try:
+        users_collection = db['Users']
+        user_doc = users_collection.find_one({"_id": ObjectId(user_id)})
+        if user_doc:
+            return User(user_doc)
+        print(f"DEBUG: load_user - User {user_id} not found")
+        return None
+    except Exception as e:
+        print(f"DEBUG: load_user exception: {e}")
+        return None
+
 
 # HTML Template - defined here before route handlers
 HTML_TEMPLATE = r'''
@@ -711,16 +754,106 @@ HTML_TEMPLATE = r'''
             border-radius: 4px;
         }
         
+
         .table-container::-webkit-scrollbar-thumb:hover {
             background: var(--text-muted);
         }
+        
+        /* Resume & Modal Styles */
+        .btn-secondary { background: var(--bg-secondary); border: 1.5px solid var(--border); color: var(--text-primary); }
+        .btn-secondary:hover { background: var(--border-light); }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: white; padding: 32px; border-radius: 16px; width: 500px; max-width: 90%; box-shadow: var(--shadow-xl); }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 24px; align-items: center; }
+        .modal-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+        .close-modal { cursor: pointer; font-size: 24px; color: var(--text-muted); background: none; border: none; }
+        
+        .file-upload-zone { border: 2px dashed var(--border); padding: 32px; text-align: center; border-radius: 8px; margin-bottom: 20px; cursor: pointer; transition: all 0.2s; background: var(--bg-primary); }
+        .file-upload-zone:hover { border-color: var(--primary); background: rgba(37,99,235,0.05); }
+        
+        .action-btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .btn-generate { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; }
+        .btn-generate:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+        .btn-download { background: var(--success); color: white; }
+        .btn-download:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+        .btn-loading { opacity: 0.7; cursor: wait; transform: none !important; }
+        
+        .header-controls { display: flex; gap: 12px; align-items: center; }
+
+        /* Auth Styles */
+        .auth-container {
+            max-width: 400px;
+            margin: 80px auto;
+            padding: 32px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+        .auth-title { font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 24px; }
+        .auth-form { display: flex; flex-direction: column; gap: 16px; }
+        .auth-input { padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        .auth-btn { background: var(--primary); color: white; padding: 12px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .auth-btn:hover { background: var(--primary-dark); }
+        .auth-link { font-size: 14px; color: var(--text-secondary); margin-top: 16px; }
+        .auth-link a { color: var(--primary); text-decoration: none; font-weight: 500; }
+        .auth-error { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; border: 1px solid #fecaca; }
     </style>
 </head>
+</head>
 <body>
+    {% if auth_mode %}
+    <div class="auth-container">
+        <h2 class="auth-title">
+            {% if auth_mode == 'login' %}Welcome Back{% else %}Create Account{% endif %}
+        </h2>
+        
+        {% if auth_error %}
+        <div class="auth-error">{{ auth_error }}</div>
+        {% endif %}
+        
+        {% for message in get_flashed_messages() %}
+        <div class="auth-error" style="background:var(--bg-secondary); border-color:var(--border); color:var(--text-primary);">{{ message }}</div>
+        {% endfor %}
+        
+        <form class="auth-form" method="POST">
+            {% if auth_mode == 'register' %}
+            <input type="text" name="name" class="auth-input" placeholder="Full Name" required>
+            {% endif %}
+            <input type="email" name="email" class="auth-input" placeholder="Email Address" required>
+            <input type="password" name="password" class="auth-input" placeholder="Password" required>
+            
+            <button type="submit" class="auth-btn">
+                {% if auth_mode == 'login' %}Sign In{% else %}Sign Up{% endif %}
+            </button>
+        </form>
+        
+        <div class="auth-link">
+            {% if auth_mode == 'login' %}
+            Don't have an account? <a href="/register">Sign up</a>
+            {% else %}
+            Already have an account? <a href="/login">Log in</a>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
     <div class="container">
-        <header>
-            <h1>💼 Job Details Viewer</h1>
-            <p class="subtitle">All jobs from Jobs_Collection collection • Unique jobs only</p>
+        <header style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>💼 Job Details Viewer</h1>
+                <p class="subtitle">All jobs from Jobs_Collection collection • Unique jobs only</p>
+            </div>
+            <div class="header-controls">
+                <div style="font-size: 13px; color: var(--text-secondary); margin-right: 12px; text-align: right;">
+                    Logged in as <strong>{{ user.name }}</strong><br>
+                    <a href="/logout" style="color: var(--danger); text-decoration: none;">Logout</a>
+                </div>
+                <button class="refresh-btn btn-secondary" onclick="openResumeSettings()">
+                    <span>📄</span>
+                    <span>Resume Settings</span>
+                </button>
+            </div>
         </header>
         
         <div class="content-wrapper">
@@ -808,6 +941,7 @@ HTML_TEMPLATE = r'''
                                 <th>Location</th>
                                 <th>Date Added</th>
                                 <th>Job URL</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="jobsTableBody">
@@ -829,6 +963,31 @@ HTML_TEMPLATE = r'''
             </div>
         </div>
     </div>
+    
+    <!-- Resume Settings Modal -->
+    <div class="modal-overlay" id="resumeModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Resume Settings</h3>
+                <button class="close-modal" onclick="closeResumeSettings()">×</button>
+            </div>
+            <div id="resumeModalContent">
+                <div class="file-upload-zone" onclick="document.getElementById('masterResumeInput').click()">
+                    <div style="font-size: 32px; margin-bottom: 12px;">📤</div>
+                    <p style="font-weight: 500; margin-bottom: 4px;">Upload Master Resume</p>
+                    <p style="font-size: 13px; color: var(--text-muted);">Click to select .pdf or .tex file</p>
+                    <input type="file" id="masterResumeInput" accept=".pdf,.tex" style="display: none;" onchange="handleFileSelect(this)">
+                </div>
+                <div id="uploadStatus" style="font-size: 13px; text-align: center; min-height: 20px;"></div>
+                <div style="margin-top: 24px; text-align: right;">
+                    <button class="cleanup-btn" style="background: var(--primary); width: 100%; justify-content: center;" onclick="uploadMasterResume()" id="btnUploadResume" disabled>
+                        Upload & Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     
     <script>
         let allJobs = [];
@@ -1100,6 +1259,120 @@ HTML_TEMPLATE = r'''
             });
         }
         
+
+        // --- Resume Functions ---
+
+        function openResumeSettings() {
+            document.getElementById('resumeModal').style.display = 'flex';
+            checkMasterResumeStatus();
+        }
+        
+        function closeResumeSettings() {
+            document.getElementById('resumeModal').style.display = 'none';
+        }
+        
+        function handleFileSelect(input) {
+            const statusDiv = document.getElementById('uploadStatus');
+            const btn = document.getElementById('btnUploadResume');
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                statusDiv.innerHTML = `Selected: <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} KB)`;
+                statusDiv.style.color = 'var(--text-primary)';
+                btn.disabled = false;
+            } else {
+                statusDiv.textContent = '';
+                btn.disabled = true;
+            }
+        }
+        
+        async function checkMasterResumeStatus() {
+            try {
+                const response = await fetch('/api/check_master_resume');
+                const data = await response.json();
+                const statusDiv = document.getElementById('uploadStatus');
+                if (data.exists) {
+                    statusDiv.innerHTML = `✅ Master Resume Found: <strong>${data.filename}</strong><br><span style="color:var(--text-muted)">Upload new file to replace.</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span style="color:var(--warning)">⚠️ No Master Resume found. Please upload one.</span>`;
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        async function uploadMasterResume() {
+            const input = document.getElementById('masterResumeInput');
+            const btn = document.getElementById('btnUploadResume');
+            const statusDiv = document.getElementById('uploadStatus');
+            
+            if (!input.files[0]) return;
+            
+            const formData = new FormData();
+            formData.append('resume', input.files[0]);
+            
+            btn.disabled = true;
+            btn.innerHTML = 'Uploading...';
+            
+            try {
+                const response = await fetch('/api/upload_master_resume', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    statusDiv.innerHTML = `✅ ${data.message}`;
+                    statusDiv.style.color = 'var(--success)';
+                    setTimeout(closeResumeSettings, 1500);
+                } else {
+                    statusDiv.textContent = 'Error: ' + data.error;
+                    statusDiv.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                statusDiv.textContent = 'Upload failed: ' + e.message;
+                statusDiv.style.color = 'var(--danger)';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Upload & Save';
+            }
+        }
+        
+        async function generateResume(jobId, btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⚙️ ...';
+            btn.classList.add('btn-loading');
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch(`/api/generate_resume/${jobId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update button content to Download
+                    btn.classList.remove('btn-loading', 'btn-generate');
+                    btn.classList.add('btn-download');
+                    btn.innerHTML = '⬇️ Download';
+                    btn.onclick = () => downloadResume(data.resume_id);
+                    btn.disabled = false;
+                    alert('✅ Resume generated successfully!');
+                } else {
+                    alert('❌ Error: ' + data.error);
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('btn-loading');
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert('❌ Connection failed: ' + e.message);
+                btn.innerHTML = originalText;
+                btn.classList.remove('btn-loading');
+                btn.disabled = false;
+            }
+        }
+        
+        function downloadResume(fileId) {
+            window.open(`/api/download_resume/${fileId}`, '_blank');
+        }
+
         function populateFilters() {
             // Get unique roles and companies
             const uniqueRoles = new Set();
@@ -1229,6 +1502,12 @@ HTML_TEMPLATE = r'''
                     <td>
                         ${job.job_url ? `<a href="${job.job_url}" target="_blank" class="job-url">View ↗</a>` : '-'}
                     </td>
+                    <td>
+                        ${job.resume_id ? 
+                            `<button class="action-btn btn-download" onclick="downloadResume('${job.resume_id}')">⬇️ Download</button>` : 
+                            `<button class="action-btn btn-generate" onclick="generateResume('${job._id}', this)">✨ Generate</button>`
+                        }
+                    </td>
                 </tr>
                 `;
             }).join('');
@@ -1317,6 +1596,48 @@ def get_mongodb_client():
         print("\n📋 Full error traceback:")
         traceback.print_exc()
         return None
+
+
+# Helper to get Database and GridFS connection
+def get_db_connection():
+    client = get_mongodb_client()
+    if not client:
+        return None, None, None, None, "Failed to connect to MongoDB"
+    
+    try:
+        # DB Selection Logic (same as get_all_jobs)
+        possible_databases = ["N8N", MONGODB_CONFIG["database_name"], "ACN", "n8n_jobs_db"]
+        possible_collection_names = ["Jobs_Collection", MONGODB_CONFIG["collection_name"], "N8n_Jobs", "N8N Jobs", "jobs"]
+        
+        actual_db = None
+        actual_coll_name = None
+        
+        for db_name in possible_databases:
+            try:
+                db_list = client.list_database_names()
+                if db_name in db_list:
+                    db = client[db_name]
+                    colls = db.list_collection_names()
+                    for coll in possible_collection_names:
+                        if coll in colls:
+                            actual_db = db
+                            actual_coll_name = coll
+                            break
+                if actual_db is not None: break
+            except: continue
+            
+        if actual_db is None:
+             # Fallback to config defaults even if they don't exist (mongo will create on write)
+            actual_db = client[MONGODB_CONFIG["database_name"]]
+            actual_coll_name = MONGODB_CONFIG["collection_name"]
+
+        collection = actual_db[actual_coll_name]
+        fs = gridfs.GridFS(actual_db)
+        
+        return client, actual_db, collection, fs, None
+        
+    except Exception as e:
+        return None, None, None, None, str(e)
 
 def get_all_jobs():
     """Fetch all jobs from MongoDB collection"""
@@ -1555,39 +1876,147 @@ def handle_exception(e):
     traceback.print_exc()
     return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
+
+# --- Auth Routes ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        client, db, collection, fs, error = get_db_connection()
+        if not client:
+             flash("Database connection error")
+             return render_template_string(HTML_TEMPLATE, auth_error="Database connection error")
+        
+        users_collection = db['Users']
+        user_doc = users_collection.find_one({"email": email})
+        
+        if user_doc and check_password_hash(user_doc['password_hash'], password):
+            user = User(user_doc)
+            login_user(user)
+            return redirect(url_for('index'))
+        
+        flash("Invalid email or password")
+        return render_template_string(HTML_TEMPLATE, auth_mode="login", auth_error="Invalid email or password")
+        
+    return render_template_string(HTML_TEMPLATE, auth_mode="login")
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        name = request.form.get('name')
+        
+        try:
+            validate_email(email)
+        except EmailNotValidError:
+            flash("Invalid email address")
+            return render_template_string(HTML_TEMPLATE, auth_mode="register", auth_error="Invalid email address")
+            
+        if len(password) < 6:
+            flash("Password must be at least 6 characters")
+            return render_template_string(HTML_TEMPLATE, auth_mode="register", auth_error="Password too short")
+            
+        client, db, collection, fs, error = get_db_connection()
+        if not client:
+             flash("Database connection error")
+             return render_template_string(HTML_TEMPLATE, auth_mode="register", auth_error="Database error")
+        
+        users_collection = db['Users']
+        
+        if users_collection.find_one({"email": email}):
+            flash("Email already exists")
+            return render_template_string(HTML_TEMPLATE, auth_mode="register", auth_error="Email already exists")
+            
+        # Create User
+        new_user = {
+            "email": email,
+            "password_hash": generate_password_hash(password),
+            "name": name,
+            "created_at": datetime.now()
+        }
+        users_collection.insert_one(new_user)
+        
+        # Login
+        user_doc = users_collection.find_one({"email": email})
+        user = User(user_doc)
+        login_user(user)
+        
+        return redirect(url_for('index'))
+        
+    return render_template_string(HTML_TEMPLATE, auth_mode="register")
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
     """Serve the main HTML page"""
-    return render_template_string(HTML_TEMPLATE)
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+    return render_template_string(HTML_TEMPLATE, user=current_user)
+
 
 @app.route('/api/jobs')
+@login_required
 def api_jobs():
-    """API endpoint to get all jobs"""
+    """API endpoint to get all jobs with user-specific application data"""
     try:
-        jobs, error = get_all_jobs()
+        client, db, collection, fs, error = get_db_connection()
+        if not client: return jsonify({"success": False, "error": "DB Error"}), 500
         
-        if error:
-            return jsonify({
-                "success": False,
-                "error": error,
-                "jobs": []
-            }), 500
+        # 1. Fetch ALL Jobs (Shared)
+        jobs = list(collection.find({}).sort("_id", -1))
         
-        # Ensure all ObjectId and datetime objects are serialized
-        if jobs:
-            serialized_jobs = []
-            for job in jobs:
-                serialized_job = {}
-                for key, value in job.items():
-                    if isinstance(value, ObjectId):
-                        serialized_job[key] = str(value)
-                    elif isinstance(value, datetime):
-                        serialized_job[key] = value.isoformat()
-                    else:
-                        serialized_job[key] = value
-                serialized_jobs.append(serialized_job)
-        else:
-            serialized_jobs = []
+        # 2. Fetch User's Applications
+        applications_collection = db['Applications']
+        user_apps = list(applications_collection.find({"user_id": current_user.id}))
+        
+        # Map job_id -> application data
+        apps_map = {app['job_id']: app for app in user_apps}
+        
+        # 3. Merge Data
+        serialized_jobs = []
+        unique_job_ids = set()
+        
+        for job in jobs:
+            # Skip duplicates in list if needed (though backend cleanup handles DB)
+            job_id_str = str(job.get('job_id'))
+            if job_id_str in unique_job_ids: continue
+            if job.get('job_id'): unique_job_ids.add(job_id_str)
+            
+            job_oid = str(job['_id'])
+            serialized_job = {}
+            
+            # Serialize basic fields
+            for key, value in job.items():
+                if isinstance(value, ObjectId):
+                    serialized_job[key] = str(value)
+                elif isinstance(value, datetime):
+                    serialized_job[key] = value.isoformat()
+                else:
+                    serialized_job[key] = value
+            
+            # ATTACH USER DATA
+            if job_oid in apps_map:
+                app_data = apps_map[job_oid]
+                serialized_job['resume_id'] = app_data.get('resume_id')
+                serialized_job['resume_filename'] = app_data.get('resume_filename')
+                serialized_job['application_status'] = app_data.get('status')
+            
+            serialized_jobs.append(serialized_job)
         
         return jsonify({
             "success": True,
@@ -1602,8 +2031,17 @@ def api_jobs():
             "error": f"Internal server error: {str(e)}",
             "jobs": []
         }), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Internal server error: {str(e)}",
+            "jobs": []
+        }), 500
 
 @app.route('/api/stats')
+@login_required
 def api_stats():
     """API endpoint to get job statistics"""
     client = None
@@ -1749,6 +2187,7 @@ def api_stats():
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
 @app.route('/api/cleanup-duplicates', methods=['POST'])
+@login_required
 def cleanup_duplicates():
     """API endpoint to delete duplicate jobs, keeping only the most recent one for each job_id"""
     print("🧹 Cleanup duplicates endpoint called")
@@ -1869,6 +2308,198 @@ def cleanup_duplicates():
             "success": False,
             "error": f"Error during cleanup: {error_msg}"
         }), 500
+
+
+# --- Resume Routes ---
+
+@app.route('/api/check_master_resume', methods=['GET'])
+@login_required
+def check_master_resume():
+    """Check if a master resume exists for current user"""
+    try:
+        client, db, collection, fs, error = get_db_connection()
+        if error: return jsonify({"exists": False, "error": error}), 500
+        
+        # Check for user's master resume
+        master_resume = fs.find_one({
+            "metadata.type": "master_resume",
+            "metadata.user_id": current_user.id
+        })
+        
+        if master_resume:
+            return jsonify({
+                "exists": True, 
+                "filename": master_resume.filename,
+                "uploadDate": master_resume.upload_date
+            })
+        return jsonify({"exists": False})
+    except Exception as e:
+        return jsonify({"exists": False, "error": str(e)}), 500
+
+@app.route('/api/upload_master_resume', methods=['POST'])
+@login_required
+def upload_master_resume():
+    """Upload Master Resume to GridFS for current user"""
+    if 'resume' not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+        
+    file = request.files['resume']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No selected file"}), 400
+        
+    if file and (file.filename.endswith('.pdf') or file.filename.endswith('.tex')):
+        try:
+            client, db, collection, fs, error = get_db_connection()
+            if error: return jsonify({"success": False, "error": error}), 500
+            
+            # Delete existing master resume(s) for this user
+            existing = fs.find({
+                "metadata.type": "master_resume",
+                "metadata.user_id": current_user.id
+            })
+            for f in existing:
+                fs.delete(f._id)
+            
+            # Save new one
+            file_id = fs.put(
+                file, 
+                filename=file.filename, 
+                metadata={
+                    "type": "master_resume",
+                    "user_id": current_user.id
+                }
+            )
+            
+            return jsonify({
+                "success": True, 
+                "message": "Master resume uploaded successfully",
+                "file_id": str(file_id)
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+            
+    return jsonify({"success": False, "error": "Invalid file type. Only PDF or TEX allowed."}), 400
+
+@app.route('/api/generate_resume/<job_id>', methods=['POST'])
+@login_required
+def generate_resume(job_id):
+    """Trigger n8n webhook to generate resume for current user"""
+    try:
+        client, db, collection, fs, error = get_db_connection()
+        if error: return jsonify({"success": False, "error": error}), 500
+        
+        # 1. Get Job Details
+        job = collection.find_one({"_id": ObjectId(job_id)})
+        if not job:
+            return jsonify({"success": False, "error": "Job not found"}), 404
+            
+        # 2. Get User's Master Resume
+        master_resume = fs.find_one({
+            "metadata.type": "master_resume",
+            "metadata.user_id": current_user.id
+        })
+        if not master_resume:
+            return jsonify({"success": False, "error": "Master resume not uploaded. Please upload one first."}), 400
+            
+        resume_content = master_resume.read().decode('utf-8', errors='ignore')
+        
+        # 3. Prepare Payload (Same as before)
+        city = ""
+        state = ""
+        if job.get('location_full') and ',' in job['location_full']:
+            parts = job['location_full'].split(',')
+            if len(parts) >= 2:
+                city = parts[0].strip()
+                state = parts[1].strip()
+
+        payload = {
+            "job_url": job.get('job_url', ''),
+            "job_description": job.get('job_description', '') or f"Job Title: {job.get('job_title')}\nCompany: {job.get('company_name')}",
+            "company_name": job.get('company_name', ''),
+            "job_title": job.get('job_title', ''),
+            "location": job.get('location_full', ''),
+            "location_city": city,
+            "location_state": state,
+            "employment_type": job.get('employment_type', 'Full-time'),
+            "remote_option": "on-site", 
+            "resume_content": resume_content,
+            "resume_filename": master_resume.filename,
+            "user_id": current_user.id # Pass user ID if n8n needs it (optional)
+        }
+        
+        # 4. Call n8n Webhook
+        webhook_url = "http://localhost:5678/webhook/resume-tailor"  # Production webhook
+        # webhook_url = "http://localhost:5678/webhook-test/resume-tailor" # Testing
+        
+        print(f"🚀 Triggering n8n webhook: {webhook_url}")
+        
+        response = requests.post(webhook_url, json=payload, stream=True)
+        
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"n8n Webhook failed: {response.text}"}), 502
+            
+        # 5. Save generated PDF to GridFS (User Specific)
+        filename = f"Resume_{job.get('company_name')}_{job.get('job_title')}.pdf".replace(' ', '_').replace('/', '-')
+        
+        if 'Content-Disposition' in response.headers:
+            import re
+            fname = re.findall('filename="?([^"]+)"?', response.headers['Content-Disposition'])
+            if fname: filename = fname[0]
+
+        generated_file_id = fs.put(
+            response.content,
+            filename=filename,
+            content_type='application/pdf',
+            metadata={
+                "type": "generated_resume", 
+                "job_id": job_id,
+                "company": job.get('company_name'),
+                "user_id": current_user.id 
+            }
+        )
+        
+        # 6. Update Applications Collection (Instead of Jobs Collection)
+        applications_collection = db['Applications']
+        applications_collection.update_one(
+            {"user_id": current_user.id, "job_id": job_id},
+            {"$set": {
+                "resume_id": str(generated_file_id),
+                "resume_filename": filename,
+                "generated_at": datetime.now(),
+                "status": "Resume Generated"
+            }},
+            upsert=True
+        )
+        
+        return jsonify({
+            "success": True, 
+            "message": "Resume generated successfully",
+            "resume_id": str(generated_file_id)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/download_resume/<file_id>', methods=['GET'])
+@login_required
+def download_resume(file_id):
+    """Download a file from GridFS"""
+    try:
+        client, db, collection, fs, error = get_db_connection()
+        if error: return f"Error: {error}", 500
+        
+        grid_out = fs.get(ObjectId(file_id))
+        
+        return send_file(
+            io.BytesIO(grid_out.read()),
+            mimetype=grid_out.content_type or 'application/pdf',
+            as_attachment=True,
+            download_name=grid_out.filename
+        )
+    except Exception as e:
+        return f"Error downloading content: {str(e)}", 404
 
 if __name__ == '__main__':
     print("=" * 70)
