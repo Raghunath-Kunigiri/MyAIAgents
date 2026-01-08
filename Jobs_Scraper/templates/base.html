@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Professional Job Tracker{% endblock %}</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-heading: #1e293b;
+            --text-body: #475569;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--background);
+            color: var(--text-body);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .auth-layout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+        }
+
+        .auth-card {
+            background: var(--surface);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: 100vh;
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .main-layout.sidebar-hidden {
+            grid-template-columns: 0 1fr;
+        }
+
+        .main-layout.sidebar-hidden aside {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(-100%);
+        }
+
+        aside {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 1.75rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1000;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.625rem;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+            font-size: 1.25rem;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .main-layout.sidebar-hidden .sidebar-toggle {
+            left: 1rem;
+        }
+
+        .logo {
+            font-size: 1.375rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            letter-spacing: -0.01em;
+        }
+
+        nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        nav a {
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            color: var(--text-body);
+            border-radius: 10px;
+            font-weight: 500;
+            font-size: 0.9375rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            position: relative;
+        }
+
+        nav a::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 0;
+            background: var(--primary);
+            border-radius: 0 3px 3px 0;
+            transition: height 0.2s;
+        }
+
+        nav a:hover {
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary);
+            transform: translateX(2px);
+        }
+
+        nav a.active {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        nav a.active::before {
+            height: 70%;
+        }
+
+        main {
+            padding: 2rem 3rem;
+            overflow-y: auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--secondary);
+        }
+
+        .btn-outline:hover {
+            background: var(--background);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-heading);
+            font-size: 0.9rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: var(--radius);
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+</head>
+
+<body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div
+        style="position: fixed; top: 1rem; right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem;">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category or 'primary' }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% if current_user.is_authenticated %}
+    <button class="sidebar-toggle" onclick="toggleSidebar()" id="sidebarToggle" title="Toggle Sidebar">☰</button>
+    <div class="main-layout" id="mainLayout">
+        <aside>
+            <div class="logo">
+                <span>💼</span> JobTracker Pro
+            </div>
+            <nav>
+                <a href="{{ url_for('jobs.dashboard') }}"
+                    class="{% if request.endpoint == 'jobs.dashboard' %}active{% endif %}">🏠 Dashboard</a>
+                <a href="{{ url_for('auth.profile') }}"
+                    class="{% if request.endpoint == 'auth.profile' %}active{% endif %}">👤 My Profile</a>
+            </nav>
+            <div style="margin-top: auto; padding-top: 2rem; border-top: 1px solid var(--border);">
+                <small style="color: var(--text-muted); display: block; margin-bottom: 1rem;">Logged in as<br><strong>{{
+                        current_user.email }}</strong></small>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-outline"
+                    style="width: 100%; justify-content: center;">Logout</a>
+            </div>
+        </aside>
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    <div class="auth-layout">
+        <div class="auth-card">
+            {% block auth_content %}{% endblock %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        // Auto-dismiss alerts
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(a => a.style.display = 'none');
+        }, 5000);
+
+        // Sidebar toggle functionality
+        function toggleSidebar() {
+            const layout = document.getElementById('mainLayout');
+            const toggle = document.getElementById('sidebarToggle');
+            if (layout.classList.contains('sidebar-hidden')) {
+                layout.classList.remove('sidebar-hidden');
+                toggle.innerHTML = '☰';
+                toggle.title = 'Hide Sidebar';
+                localStorage.setItem('sidebarVisible', 'true');
+            } else {
+                layout.classList.add('sidebar-hidden');
+                toggle.innerHTML = '☰';
+                toggle.title = 'Show Sidebar';
+                localStorage.setItem('sidebarVisible', 'false');
+            }
+        }
+
+        // Restore sidebar state on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebarVisible = localStorage.getItem('sidebarVisible');
+            if (sidebarVisible === 'false') {
+                const layout = document.getElementById('mainLayout');
+                const toggle = document.getElementById('sidebarToggle');
+                if (layout && toggle) {
+                    layout.classList.add('sidebar-hidden');
+                    toggle.innerHTML = '☰';
+                    toggle.title = 'Show Sidebar';
+                }
+            }
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

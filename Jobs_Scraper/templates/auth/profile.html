@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - JobTracker Pro{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <h1 style="font-size: 1.85rem; color: var(--text-heading);">Account Settings</h1>
+        <p style="color: var(--secondary);">Manage your profile and security</p>
+    </div>
+</header>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
+    <!-- Profile Info -->
+    <section class="card">
+        <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">👤 Profile Details</h3>
+        <form action="{{ url_for('auth.profile') }}" method="POST">
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="name" class="form-input" value="{{ current_user.name }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" name="email" class="form-input" value="{{ current_user.email }}" required>
+            </div>
+
+            <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border);">
+            <h4 style="margin-bottom: 1rem; color: var(--primary);">⚙️ N8N Integration</h4>
+            <div class="form-group">
+                <label class="form-label">Webhook URL</label>
+                <input type="url" name="n8n_webhook_url" class="form-input"
+                    placeholder="http://localhost:5678/webhook/..." value="{{ current_user.n8n_webhook_url }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key (Optional)</label>
+                <input type="password" name="n8n_api_key" class="form-input" placeholder="Your N8N API Key"
+                    value="{{ current_user.n8n_api_key }}">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Update Profile &
+                Settings</button>
+        </form>
+    </section>
+
+    <!-- Change Password -->
+    <section class="card">
+        <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">🔒 Security</h3>
+        <form action="{{ url_for('auth.reset_password') }}" method="POST">
+            <div class="form-group">
+                <label class="form-label">Current Password</label>
+                <input type="password" name="old_password" class="form-input" placeholder="••••••••" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input type="password" name="new_password" class="form-input" placeholder="At least 6 characters"
+                    required>
+            </div>
+            <button type="submit" class="btn btn-outline"
+                style="border-color: var(--primary); color: var(--primary);">Change Password</button>
+        </form>
+    </section>
+</div>
+{% endblock %}

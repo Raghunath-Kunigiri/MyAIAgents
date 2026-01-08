@@ -1,0 +1,1158 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - JobTracker Pro{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Modern Dashboard Styles */
+    :root {
+        --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Header Improvements */
+    header {
+        margin-bottom: 2rem;
+    }
+
+    header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-heading);
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.02em;
+    }
+
+    header p {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        margin: 0;
+    }
+
+    header .btn-group {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    /* Stats Cards - Modern Design */
+    #statsContainer {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: var(--surface);
+        border-radius: 16px;
+        padding: 1.75rem;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--primary-gradient);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .stat-card.success::before {
+        background: var(--success-gradient);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary-light);
+    }
+
+    .stat-card:hover::before {
+        opacity: 1;
+    }
+
+    .stat-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+
+    .stat-card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .stat-card.success .stat-card-icon {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+    }
+
+    .stat-card-label {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-card-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-heading);
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+    }
+
+    /* Premium Search Bar */
+    .search-wrapper {
+        position: relative;
+        max-width: 100%;
+        margin-bottom: 1.5rem;
+    }
+
+    .search-wrapper::before {
+        content: '🔍';
+        position: absolute;
+        left: 1.25rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1.125rem;
+        pointer-events: none;
+        opacity: 0.4;
+        z-index: 1;
+    }
+
+    #searchBox {
+        width: 100%;
+        padding: 1rem 1.25rem 1rem 3.5rem;
+        border: 2px solid var(--border);
+        border-radius: 14px;
+        font-size: 0.9375rem;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--surface);
+        font-family: 'Inter', sans-serif;
+    }
+
+    #searchBox:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        background: var(--surface);
+    }
+
+    #searchBox::placeholder {
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    /* Premium Filter Chips */
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-btn {
+        padding: 0.6875rem 1.25rem;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--text-body);
+        background: var(--surface);
+        border: 2px solid var(--border);
+        border-radius: 28px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        font-family: 'Inter', sans-serif;
+        position: relative;
+    }
+
+    .filter-btn:hover:not(.active) {
+        border-color: var(--primary-light);
+        background: rgba(99, 102, 241, 0.06);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.15);
+    }
+
+    .filter-btn.active {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+        transform: translateY(-2px);
+    }
+
+    .filter-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.625rem;
+        height: 1.625rem;
+        padding: 0 0.5rem;
+        background: rgba(0, 0, 0, 0.08);
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .filter-btn.active .filter-count {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+    }
+
+    /* Premium Table Design */
+    .table-wrapper {
+        background: var(--surface);
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .table-header {
+        padding: 2rem;
+        border-bottom: 1px solid var(--border-light);
+        background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    thead {
+        background: #fafbfc;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    thead th {
+        padding: 1.25rem 2rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        text-align: left;
+        border-bottom: 2px solid var(--border);
+        font-family: 'Inter', sans-serif;
+        vertical-align: middle;
+    }
+
+    thead th:first-child {
+        width: 30%;
+    }
+
+    thead th:nth-child(2) {
+        width: 20%;
+    }
+
+    thead th:nth-child(3) {
+        width: 18%;
+    }
+
+    thead th:nth-child(4) {
+        width: 15%;
+    }
+
+    thead th:last-child {
+        width: 17%;
+        text-align: right;
+    }
+
+    tbody tr {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    tbody tr:nth-child(even) {
+        background: rgba(0, 0, 0, 0.01);
+    }
+
+    tbody tr:hover {
+        background: linear-gradient(90deg, rgba(99, 102, 241, 0.04) 0%, rgba(99, 102, 241, 0.02) 100%);
+        transform: scale(1.001);
+        box-shadow: inset 4px 0 0 var(--primary);
+    }
+
+    tbody td {
+        padding: 1.5rem 2rem;
+        vertical-align: middle;
+    }
+
+    tbody td:last-child {
+        text-align: right;
+    }
+
+    .job-title {
+        font-weight: 600;
+        color: var(--text-heading);
+        font-size: 0.9375rem;
+        margin-bottom: 0.375rem;
+        cursor: pointer;
+        transition: color 0.2s;
+        font-family: 'Inter', sans-serif;
+        letter-spacing: -0.01em;
+    }
+
+    .job-title:hover {
+        color: var(--primary);
+    }
+
+    .job-location {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    .company-name {
+        font-weight: 600;
+        color: var(--text-heading);
+        font-size: 0.9375rem;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Premium Status Badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 0.875rem;
+        border-radius: 24px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-family: 'Inter', sans-serif;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .status-interested {
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        color: #0369a1;
+    }
+
+    .status-applied {
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        color: #4338ca;
+    }
+
+    .status-screening-call {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #b45309;
+    }
+
+    .status-interviewing {
+        background: linear-gradient(135deg, #fae8ff 0%, #f3e8ff 100%);
+        color: #a21caf;
+    }
+
+    .status-offer {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #15803d;
+    }
+
+    .status-rejected {
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        color: #b91c1c;
+    }
+
+    .status-not-interested {
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+        color: #475569;
+    }
+
+    .status-not-set {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: #64748b;
+    }
+
+    /* Status Select Dropdown */
+    .status-select {
+        background: var(--surface);
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .status-select:hover {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .status-select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    /* Premium Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 5rem 2rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+        font-size: 5rem;
+        margin-bottom: 1.5rem;
+        opacity: 0.4;
+        filter: grayscale(0.2);
+    }
+
+    .empty-state-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-heading);
+        margin-bottom: 0.75rem;
+        font-family: 'Inter', sans-serif;
+        letter-spacing: -0.02em;
+    }
+
+    .empty-state-message {
+        font-size: 1rem;
+        color: var(--text-muted);
+        font-weight: 400;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    /* Premium Pagination */
+    .table-footer {
+        padding: 1.5rem 2rem;
+        border-top: 1px solid var(--border-light);
+        background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .pagination-info {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        font-weight: 500;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .pagination-btn {
+        padding: 0.6875rem 1.375rem;
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text-body);
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-family: 'Inter', sans-serif;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: var(--background);
+    }
+
+    /* Premium Action Buttons */
+    .action-buttons {
+        display: flex;
+        gap: 0.625rem;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .action-btn {
+        padding: 0.5625rem 1rem;
+        border-radius: 10px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .action-btn-primary {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+    }
+
+    .action-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .action-btn-outline {
+        background: transparent;
+        border: 1.5px solid var(--border);
+        color: var(--text-body);
+    }
+
+    .action-btn-outline:hover {
+        background: var(--background);
+        border-color: var(--primary);
+        color: var(--primary);
+        transform: translateY(-2px);
+    }
+
+    /* Premium Loading State */
+    .loading-state {
+        text-align: center;
+        padding: 4rem;
+        color: var(--text-muted);
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1.5rem;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Premium Buttons */
+    .btn {
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-outline {
+        border: 1.5px solid var(--border);
+    }
+
+    .btn-outline:hover {
+        border-color: var(--primary);
+        background: rgba(99, 102, 241, 0.05);
+        transform: translateY(-2px);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        #statsContainer {
+            grid-template-columns: 1fr;
+        }
+        
+        header .btn-group {
+            width: 100%;
+        }
+        
+        .filter-container {
+            gap: 0.5rem;
+        }
+        
+        .filter-btn {
+            font-size: 0.8125rem;
+            padding: 0.5625rem 1rem;
+        }
+
+        tbody td {
+            padding: 1.25rem 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <h1>Dashboard</h1>
+        <p>Track and manage your job applications in one place</p>
+    </div>
+    <div class="btn-group">
+        <a href="/api/export_jobs" class="btn btn-outline">📥 Export CSV</a>
+        <button class="btn btn-outline" onclick="openResumeSettings()">📄 Resume Settings</button>
+        <button class="btn btn-primary" id="refreshBtn">🔄 Refresh</button>
+    </div>
+</header>
+
+<!-- Stats Section -->
+<div id="statsContainer">
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <div>
+                <div class="stat-card-label">Total Jobs</div>
+                <div class="stat-card-value" id="statTotal">-</div>
+            </div>
+            <div class="stat-card-icon">💼</div>
+        </div>
+    </div>
+    <div class="stat-card success">
+        <div class="stat-card-header">
+            <div>
+                <div class="stat-card-label">Companies</div>
+                <div class="stat-card-value" id="statCompanies">-</div>
+            </div>
+            <div class="stat-card-icon">🏢</div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="table-wrapper">
+    <div class="table-header">
+        <div class="search-wrapper">
+            <input type="text" id="searchBox" placeholder="Search by title, company, or location...">
+        </div>
+        <div class="filter-container" id="statusFilters">
+            <div class="filter-btn active" data-status="All">
+                <span>All Jobs</span>
+                <span class="filter-count" data-count="all">0</span>
+            </div>
+            <div class="filter-btn" data-status="Not Set">
+                <span>Not Set</span>
+                <span class="filter-count" data-count="not-set">0</span>
+            </div>
+            <div class="filter-btn" data-status="Interested">
+                <span>Interested</span>
+                <span class="filter-count" data-count="interested">0</span>
+            </div>
+            <div class="filter-btn" data-status="Applied">
+                <span>Applied</span>
+                <span class="filter-count" data-count="applied">0</span>
+            </div>
+            <div class="filter-btn" data-status="Screening Call">
+                <span>Screening</span>
+                <span class="filter-count" data-count="screening">0</span>
+            </div>
+            <div class="filter-btn" data-status="Interviewing">
+                <span>Interviewing</span>
+                <span class="filter-count" data-count="interviewing">0</span>
+            </div>
+            <div class="filter-btn" data-status="Offer">
+                <span>Offer</span>
+                <span class="filter-count" data-count="offer">0</span>
+            </div>
+            <div class="filter-btn" data-status="Rejected">
+                <span>Rejected</span>
+                <span class="filter-count" data-count="rejected">0</span>
+            </div>
+            <div class="filter-btn" data-status="Not Interested">
+                <span>Not Interested</span>
+                <span class="filter-count" data-count="not-interested">0</span>
+            </div>
+        </div>
+    </div>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Job Title</th>
+                    <th>Company</th>
+                    <th>Status</th>
+                    <th>Added Date</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="jobsTableBody">
+                <!-- Dynamic Content -->
+            </tbody>
+        </table>
+    </div>
+    <div class="table-footer">
+        <div class="pagination-info">
+            <span id="paginationInfo">Loading...</span>
+        </div>
+        <div class="pagination-controls">
+            <button class="pagination-btn" id="prevPage" onclick="changePage(-1)">← Previous</button>
+            <button class="pagination-btn" id="nextPage" onclick="changePage(1)">Next →</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resume Modal -->
+<div id="resumeModal"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:100%; max-width:500px; padding:2.5rem; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+            <h3 style="font-size: 1.5rem; font-weight: 700; color: var(--text-heading);">Resume Settings</h3>
+            <button onclick="closeResumeSettings()"
+                style="background:none; border:none; font-size:1.5rem; cursor:pointer; color: var(--text-muted); transition: color 0.2s;"
+                onmouseover="this.style.color='var(--text-heading)'"
+                onmouseout="this.style.color='var(--text-muted)'">&times;</button>
+        </div>
+        <div
+            style="border:2px dashed var(--border); padding:2.5rem; text-align:center; border-radius:16px; margin-bottom:1.5rem; background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);">
+            <div style="font-size:3rem; margin-bottom:0.75rem;">📤</div>
+            <p style="font-weight:600; margin-bottom:0.25rem; font-size: 1.125rem; color: var(--text-heading);">Upload Master Resume</p>
+            <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:1.5rem;">PDF or TEX files only</p>
+            <input type="file" id="resumeInput" style="display:none" onchange="updateUploadLabel(this)">
+            <button class="btn btn-outline" onclick="document.getElementById('resumeInput').click()"
+                id="uploadLabel">Select File</button>
+        </div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="uploadResume()">Save &
+            Upload</button>
+    </div>
+</div>
+
+<!-- Job Detail Modal -->
+<div id="detailModal"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index:1000; align-items:center; justify-content:center; padding: 2rem;">
+    <div class="card"
+        style="width:100%; max-width:900px; max-height: 90vh; padding:0; display: flex; flex-direction: column; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div
+            style="padding: 2rem; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);">
+            <h3 id="modalTitle" style="color: var(--text-heading); font-size: 1.5rem; font-weight: 700;">Job Details</h3>
+            <button onclick="closeDetailModal()"
+                style="background:none; border:none; font-size:1.5rem; cursor:pointer; color: var(--text-muted); transition: color 0.2s;"
+                onmouseover="this.style.color='var(--text-heading)'"
+                onmouseout="this.style.color='var(--text-muted)'">&times;</button>
+        </div>
+        <div style="padding: 2rem; overflow-y: auto; flex-grow: 1;">
+            <div id="modalMeta" style="margin-bottom: 2rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+                <!-- Company and Location info -->
+            </div>
+            <div style="margin-bottom: 2rem;">
+                <h4 style="margin-bottom: 0.75rem; color: var(--text-heading); font-weight: 600; font-size: 1.125rem;">Application Notes</h4>
+                <textarea id="modalNotes" class="form-input" style="min-height: 120px; resize: vertical; border-radius: 12px; font-family: 'Inter', sans-serif;"
+                    placeholder="Add private notes about this job (e.g. contact person, interview questions...)"></textarea>
+                <button class="btn btn-primary" onclick="saveNotes()"
+                    style="margin-top: 1rem; font-size: 0.875rem;">💾 Save Notes</button>
+            </div>
+            <div>
+                <h4 style="margin-bottom: 0.75rem; color: var(--text-heading); font-weight: 600; font-size: 1.125rem;">Job Description</h4>
+                <div id="modalDescription"
+                    style="background: #fafbfc; padding: 1.75rem; border-radius: 16px; border: 1px solid var(--border-light); font-size: 0.9375rem; white-space: pre-wrap; line-height: 1.7; color: var(--text-body);">
+                    <!-- Description text -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let allJobsLocal = [];
+    let currentTab = 'All';
+    let currentPage = 1;
+    const jobsPerPage = 50;
+
+    async function loadStats() {
+        try {
+            const res = await fetch('/api/stats');
+            if (!res.ok) {
+                console.error('Failed to load stats:', res.status);
+                return;
+            }
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('statTotal').innerText = data.stats.total_jobs;
+                document.getElementById('statCompanies').innerText = data.stats.total_companies;
+
+                // Update filter button counts
+                const counts = data.stats.status_counts || {};
+                const filterBtns = document.querySelectorAll('.filter-btn');
+
+                filterBtns.forEach(btn => {
+                    const status = btn.dataset.status;
+                    const countEl = btn.querySelector('.filter-count');
+
+                    if (status === 'All') {
+                        countEl.innerText = data.stats.total_jobs;
+                    } else {
+                        const count = counts[status] || 0;
+                        countEl.innerText = count;
+                    }
+                });
+            } else {
+                console.error('Stats error:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function loadJobs() {
+        try {
+            // Show loading state
+            const tbody = document.getElementById('jobsTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5">
+                        <div class="loading-state">
+                            <div class="loading-spinner"></div>
+                            <div>Loading jobs...</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
+            const res = await fetch('/api/jobs');
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            
+            const data = await res.json();
+            if (data.success) {
+                allJobsLocal = data.jobs || [];
+                filterAndRender();
+            } else {
+                throw new Error(data.error || 'Failed to load jobs');
+            }
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+            const tbody = document.getElementById('jobsTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <div class="empty-state-title">Error loading jobs</div>
+                            <div class="empty-state-message">${error.message}</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    function filterAndRender() {
+        const query = document.getElementById('searchBox').value.toLowerCase();
+        let filtered = allJobsLocal;
+
+        if (currentTab !== 'All') {
+            filtered = filtered.filter(j => {
+                const status = j.app_status || 'Not Set';
+                return status === currentTab;
+            });
+        }
+
+        if (query) {
+            filtered = filtered.filter(j =>
+                j.job_title.toLowerCase().includes(query) ||
+                j.company_name.toLowerCase().includes(query) ||
+                j.location_full.toLowerCase().includes(query)
+            );
+        }
+
+        // Pagination
+        const totalJobs = filtered.length;
+        const totalPages = Math.ceil(totalJobs / jobsPerPage);
+        const startIndex = (currentPage - 1) * jobsPerPage;
+        const endIndex = Math.min(startIndex + jobsPerPage, totalJobs);
+        const paginatedJobs = filtered.slice(startIndex, endIndex);
+
+        renderJobs(paginatedJobs);
+        updatePaginationInfo(startIndex + 1, endIndex, totalJobs, totalPages);
+    }
+
+    function updatePaginationInfo(start, end, total, totalPages) {
+        if (total === 0) {
+            document.getElementById('paginationInfo').innerText = 'No jobs to display';
+        } else {
+            document.getElementById('paginationInfo').innerText = `Showing ${start}-${end} of ${total} jobs`;
+        }
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages || totalPages === 0;
+    }
+
+    function changePage(direction) {
+        currentPage += direction;
+        if (currentPage < 1) currentPage = 1;
+        filterAndRender();
+    }
+
+    function getStatusBadgeClass(status) {
+        if (!status) return 'status-not-set';
+        const statusMap = {
+            'Interested': 'status-interested',
+            'Applied': 'status-applied',
+            'Screening Call': 'status-screening-call',
+            'Interviewing': 'status-interviewing',
+            'Offer': 'status-offer',
+            'Rejected': 'status-rejected',
+            'Not Interested': 'status-not-interested',
+            'Not Set': 'status-not-set'
+        };
+        return statusMap[status] || 'status-not-set';
+    }
+
+    function renderJobs(jobs) {
+        const tbody = document.getElementById('jobsTableBody');
+        
+        if (jobs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <div class="empty-state-title">No jobs found</div>
+                            <div class="empty-state-message">Try adjusting your filters or search terms to find what you're looking for</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = jobs.map(j => {
+            const status = j.app_status || 'Not Set';
+            const statusClass = getStatusBadgeClass(status);
+            const escapedJobId = j._id.replace(/'/g, "\\'");
+            const escapedTitle = (j.job_title || 'N/A').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            const escapedCompany = (j.company_name || 'N/A').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            const escapedLocation = (j.location_full || 'N/A').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            
+            return `
+                <tr>
+                    <td onclick="openDetailModal('${escapedJobId}')">
+                        <div class="job-title">${escapedTitle}</div>
+                        <div class="job-location">${escapedLocation}</div>
+                    </td>
+                    <td>
+                        <div class="company-name">${escapedCompany}</div>
+                    </td>
+                    <td>
+                        <select class="form-input status-select" style="padding: 0.5rem 0.75rem; font-size: 0.8125rem; min-width: 160px; cursor: pointer; border: 1.5px solid var(--border); border-radius: 8px;" onchange="updateStatus('${escapedJobId}', this.value, this)">
+                            <option value="" disabled>Select Status</option>
+                            <option value="Interested" ${status === 'Interested' ? 'selected' : ''}>Interested</option>
+                            <option value="Applied" ${status === 'Applied' ? 'selected' : ''}>Applied</option>
+                            <option value="Screening Call" ${status === 'Screening Call' ? 'selected' : ''}>Screening Call</option>
+                            <option value="Interviewing" ${status === 'Interviewing' ? 'selected' : ''}>Interviewing</option>
+                            <option value="Offer" ${status === 'Offer' ? 'selected' : ''}>Offer</option>
+                            <option value="Rejected" ${status === 'Rejected' ? 'selected' : ''}>Rejected</option>
+                            <option value="Not Interested" ${status === 'Not Interested' ? 'selected' : ''}>Not Interested</option>
+                        </select>
+                    </td>
+                    <td style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">${j.timestamp_added || 'N/A'}</td>
+                    <td style="text-align: right;">
+                        <div class="action-buttons">
+                            ${j.job_url ? `<a href="${j.job_url}" target="_blank" class="action-btn action-btn-outline">🔗 View</a>` : ''}
+                            ${j.resume_id ?
+                                `<button class="action-btn action-btn-primary" onclick="downloadResume('${j.resume_id}')" title="Download Resume">⬇️ Download</button>
+                                 <button class="action-btn action-btn-outline" onclick="generateResume('${escapedJobId}', this)" title="Regenerate Resume">🔄</button>` :
+                                `<button class="action-btn action-btn-primary" onclick="generateResume('${escapedJobId}', this)" title="Generate Resume">✨ Generate</button>`
+                            }
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    let currentJobOid = null;
+    function openDetailModal(jobOid) {
+        const job = allJobsLocal.find(j => j._id === jobOid);
+        if (!job) return;
+        currentJobOid = jobOid;
+
+        document.getElementById('modalTitle').innerText = job.job_title;
+        document.getElementById('modalMeta').innerHTML = `
+        <div><small style="color:var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.75rem;">COMPANY</small><br><strong style="font-size: 1.125rem; color: var(--text-heading);">${job.company_name}</strong></div>
+        <div><small style="color:var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.75rem;">LOCATION</small><br><strong style="font-size: 1.125rem; color: var(--text-heading);">${job.location_full}</strong></div>
+    `;
+        document.getElementById('modalNotes').value = job.notes || '';
+        document.getElementById('modalDescription').innerText = job.job_description;
+        document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+    async function saveNotes() {
+        const notes = document.getElementById('modalNotes').value;
+        const res = await fetch(`/api/update_app_notes/${currentJobOid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Notes saved!');
+            loadJobs();
+        }
+    }
+
+    async function updateStatus(jobId, status, selectElement) {
+        if (!status) {
+            // If empty value selected, restore previous status
+            if (selectElement) {
+                // Find the job's current status and restore it
+                const job = allJobsLocal.find(j => j._id === jobId);
+                if (job && job.app_status) {
+                    selectElement.value = job.app_status;
+                } else {
+                    selectElement.selectedIndex = 0;
+                }
+            }
+            return;
+        }
+
+        // Disable select while updating
+        if (selectElement) {
+            selectElement.disabled = true;
+            selectElement.style.opacity = '0.6';
+        }
+
+        try {
+            const res = await fetch(`/api/update_app_status/${jobId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update local data
+                const jobIndex = allJobsLocal.findIndex(j => j._id === jobId);
+                if (jobIndex !== -1) {
+                    allJobsLocal[jobIndex].app_status = status;
+                }
+                loadStats();
+                filterAndRender();
+            } else {
+                alert('Failed to update status: ' + (data.error || 'Unknown error'));
+                // Restore previous value
+                if (selectElement) {
+                    const job = allJobsLocal.find(j => j._id === jobId);
+                    if (job && job.app_status) {
+                        selectElement.value = job.app_status;
+                    }
+                }
+            }
+        } catch (error) {
+            alert('Error updating status: ' + error.message);
+            // Restore previous value
+            if (selectElement) {
+                const job = allJobsLocal.find(j => j._id === jobId);
+                if (job && job.app_status) {
+                    selectElement.value = job.app_status;
+                }
+            }
+        } finally {
+            // Re-enable select
+            if (selectElement) {
+                selectElement.disabled = false;
+                selectElement.style.opacity = '1';
+            }
+        }
+    }
+
+    document.getElementById('searchBox').oninput = filterAndRender;
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelector('.filter-btn.active').classList.remove('active');
+            btn.classList.add('active');
+            currentTab = btn.dataset.status;
+            currentPage = 1;
+            filterAndRender();
+        };
+    });
+
+    async function generateResume(jobId, btn) {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/generate_resume/${jobId}`, { method: 'POST' });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Resume generated successfully!');
+                loadJobs();
+            } else {
+                alert('Error: ' + data.error);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Connection failed: ' + e.message);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    function downloadResume(fileId) { window.open(`/api/download_resume/${fileId}`, '_blank'); }
+    function openResumeSettings() { document.getElementById('resumeModal').style.display = 'flex'; }
+    function closeResumeSettings() { document.getElementById('resumeModal').style.display = 'none'; }
+    function updateUploadLabel(input) { if (input.files[0]) document.getElementById('uploadLabel').innerText = input.files[0].name; }
+
+    async function uploadResume() {
+        const file = document.getElementById('resumeInput').files[0];
+        if (!file) return alert('Select a file first');
+        const formData = new FormData();
+        formData.append('resume', file);
+        const res = await fetch('/api/upload_master_resume', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.success) {
+            alert('Resume uploaded!');
+            closeResumeSettings();
+        }
+    }
+
+    document.getElementById('refreshBtn').onclick = () => { 
+        currentPage = 1;
+        loadStats(); 
+        loadJobs(); 
+    };
+    
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => { 
+        loadStats(); 
+        loadJobs(); 
+    });
+</script>
+{% endblock %}
