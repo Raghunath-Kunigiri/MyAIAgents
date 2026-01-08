@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/resume",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/job_input_form.html",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/Resume_Generator/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ]
+}
+
