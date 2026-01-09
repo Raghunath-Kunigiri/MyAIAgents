@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, redirect, current_app
 from flask_login import login_required, current_user
 from webapp import get_db, MONGODB_CONFIG
 from bson import ObjectId
@@ -6,19 +6,32 @@ from datetime import datetime
 import gridfs
 import io
 import requests
+import os
 
 jobs = Blueprint('jobs', __name__)
 
 @jobs.route('/')
 @login_required
 def dashboard():
-    return render_template('jobs/index.html', user=current_user)
+    # Redirect to React frontend (for development)
+    # In production, if frontend is deployed separately, redirect to FRONTEND_URL
+    # If frontend is served from Flask, we could serve the built files here
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    return redirect(frontend_url)
 
 @jobs.route('/api/stats')
 @login_required
 def api_stats():
     client = None
     try:
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": "Authentication required",
+                "redirect": "/login"
+            }), 401
+        
         client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
         apps_collection = db['Applications']
@@ -26,16 +39,24 @@ def api_stats():
         total_jobs = collection.count_documents({})
         unique_companies = len(collection.distinct("company_name"))
         
-        # Status stats
+        # Status stats - get user_id safely
+        user_id = getattr(current_user, 'id', None) if current_user.is_authenticated else None
+        if not user_id:
+            return jsonify({
+                "success": False,
+                "error": "User ID not found"
+            }), 401
+        
         pipeline = [
-            {"$match": {"user_id": current_user.id}},
+            {"$match": {"user_id": user_id}},
             {"$group": {"_id": "$status", "count": {"$sum": 1}}}
         ]
         status_counts = {item['_id']: item['count'] for item in apps_collection.aggregate(pipeline) if item['_id'] is not None}
         
         # Calculate jobs without status (not in Applications collection)
+        # Total jobs minus jobs this user has already applied to = jobs with "Not Set" status
         applied_total = sum(status_counts.values())
-        not_set_count = total_jobs - applied_total
+        not_set_count = max(0, total_jobs - applied_total)
         if not_set_count > 0:
             status_counts['Not Set'] = not_set_count
 
@@ -57,9 +78,14 @@ def api_stats():
             }
         })
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print("ERROR in api_stats:")
+        print(error_trace)
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "traceback": error_trace if current_app.debug else None
         }), 500
     finally:
         if client:
@@ -70,43 +96,72 @@ def api_stats():
 def api_jobs():
     client = None
     try:
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": "Authentication required",
+                "redirect": "/login"
+            }), 401
+        
         client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
         
-        # Optimize: Use aggregation to deduplicate at database level and limit fields
-        # First, get distinct job_ids to filter duplicates
-        pipeline = [
-            {"$sort": {"_id": -1}},  # Sort by newest first
-            {"$group": {
-                "_id": "$job_id",
-                "doc": {"$first": "$$ROOT"}  # Keep first (newest) document for each job_id
-            }},
-            {"$replaceRoot": {"newRoot": "$doc"}},
-            {"$limit": 1000}  # Limit to prevent excessive data transfer
-        ]
+        # Get all jobs, with deduplication by job_id
+        # Strategy: Get all jobs first, then deduplicate in Python for better error handling
+        try:
+            # Get all jobs sorted by newest first
+            all_jobs_raw = list(collection.find({}).sort("_id", -1).limit(1000))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "error": f"Error fetching jobs: {str(e)}"
+            }), 500
         
-        # For jobs without job_id, we need to handle them separately
-        jobs_with_id = list(collection.aggregate(pipeline))
-        jobs_without_id = list(collection.find({"job_id": None}).sort("_id", -1).limit(100))
+        # Deduplicate by job_id (if it exists)
+        all_jobs = []
+        seen_job_ids = set()
         
-        all_jobs = jobs_with_id + jobs_without_id
-        all_jobs.sort(key=lambda x: x.get('_id'), reverse=True)  # Sort by _id descending
-        
-        # Fetch user applications in one query
-        apps_collection = db['Applications']
-        user_apps = {str(app['job_id']): app for app in apps_collection.find({"user_id": current_user.id})}
-        
-        serialized_jobs = []
-        seen_ids = set()
-        
-        for job in all_jobs:
+        for job in all_jobs_raw:
             job_id = job.get('job_id')
             if job_id is not None:
                 job_id_str = str(job_id)
-                if job_id_str in seen_ids:
-                    continue
-                seen_ids.add(job_id_str)
+                if job_id_str not in seen_job_ids:
+                    seen_job_ids.add(job_id_str)
+                    all_jobs.append(job)
+            else:
+                # Jobs without job_id - include them all (use _id as unique identifier)
+                all_jobs.append(job)
+        
+        # Fetch user applications in one query
+        # Applications collection uses job_id field which should match job._id
+        apps_collection = db['Applications']
+        try:
+            # Safely get user ID
+            user_id = getattr(current_user, 'id', None) if current_user.is_authenticated else None
+            if not user_id:
+                return jsonify({
+                    "success": False,
+                    "error": "User ID not found"
+                }), 401
             
+            user_apps_list = list(apps_collection.find({"user_id": user_id}))
+            # Create lookup dict using job_id (which should be the ObjectId of the job)
+            user_apps = {}
+            for app in user_apps_list:
+                job_id = app.get('job_id')
+                if job_id:
+                    # Store with both ObjectId string and regular string for lookup flexibility
+                    user_apps[str(job_id)] = app
+        except Exception as e:
+            print(f"Error fetching user applications: {e}")
+            user_apps = {}
+        
+        serialized_jobs = []
+        
+        for job in all_jobs:
             job_oid = str(job['_id'])
             serialized_job = {
                 "_id": job_oid,
@@ -119,23 +174,38 @@ def api_jobs():
                 "notes": ""
             }
             
+            # Look up user application data - try both job_oid and job_id
+            app_data = None
             if job_oid in user_apps:
-                app = user_apps[job_oid]
-                serialized_job['resume_id'] = app.get('resume_id')
-                serialized_job['app_status'] = app.get('status', None)
-                serialized_job['notes'] = app.get('notes', '')
+                app_data = user_apps[job_oid]
+            else:
+                job_id = job.get('job_id')
+                if job_id and str(job_id) in user_apps:
+                    app_data = user_apps[str(job_id)]
+            
+            if app_data:
+                serialized_job['resume_id'] = app_data.get('resume_id')
+                serialized_job['app_status'] = app_data.get('status', None)
+                serialized_job['notes'] = app_data.get('notes', '')
             else:
                 serialized_job['app_status'] = None
                 
             serialized_jobs.append(serialized_job)
         
-        return jsonify({"success": True, "jobs": serialized_jobs})
+        return jsonify({
+            "success": True, 
+            "jobs": serialized_jobs,
+            "count": len(serialized_jobs)
+        })
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        error_trace = traceback.format_exc()
+        print("ERROR in api_jobs:")
+        print(error_trace)
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "traceback": error_trace if current_app.debug else None
         }), 500
     finally:
         if client:
@@ -187,13 +257,30 @@ def generate_resume(job_id):
     """Trigger n8n webhook to generate resume for current user"""
     client = None
     try:
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": "Authentication required",
+                "redirect": "/login"
+            }), 401
+        
         client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
         fs = gridfs.GridFS(db)
         
-        # 1. Get Job Details
-        job = collection.find_one({"_id": ObjectId(job_id)})
+        # 1. Get Job Details - Handle invalid ObjectId
+        try:
+            job_oid = ObjectId(job_id) if job_id else None
+        except Exception:
+            if client:
+                client.close()
+            return jsonify({"success": False, "error": f"Invalid job ID format: {job_id}"}), 400
+        
+        job = collection.find_one({"_id": job_oid})
         if not job:
+            if client:
+                client.close()
             return jsonify({"success": False, "error": "Job not found"}), 404
             
         # 2. Get User's Master Resume
@@ -233,9 +320,26 @@ def generate_resume(job_id):
             "user_id": current_user.id
         }
         
-        # 4. Call n8n Webhook
-        webhook_url = current_user.n8n_webhook_url
-        if not webhook_url:
+        # 4. Call n8n Webhooks (both production and local)
+        # Define webhook URLs - user's configured URL + additional test webhooks
+        webhook_urls = []
+        
+        # Add user's configured webhook URL
+        if current_user.n8n_webhook_url:
+            webhook_urls.append(current_user.n8n_webhook_url)
+        
+        # Add additional webhook URLs for testing
+        additional_webhooks = [
+            "http://54.90.110.145:5678/webhook-test/resume-tailor",  # Cloud Test
+            "http://192.168.1.199:5678/webhook/resume-tailor"   # Local/Network
+        ]
+        
+        # Add additional webhooks (avoid duplicates)
+        for webhook in additional_webhooks:
+            if webhook not in webhook_urls:
+                webhook_urls.append(webhook)
+        
+        if not webhook_urls:
             if client:
                 client.close()
             return jsonify({"success": False, "error": "N8N Webhook URL not configured. Please go to your profile and set it up."}), 400
@@ -245,52 +349,100 @@ def generate_resume(job_id):
             headers['X-N8N-API-KEY'] = current_user.n8n_api_key
             # Alternative: headers['Authorization'] = f"Bearer {current_user.n8n_api_key}"
         
-        # Try POST first (standard for webhooks with data)
-        try:
-            response = requests.post(webhook_url, json=payload, headers=headers, stream=True, timeout=60)
-            
-            # If webhook is configured for GET, try GET with query parameters
-            if response.status_code == 404 and "GET request" in response.text:
-                # For GET requests, we need to send data as query parameters
-                # Note: This won't work well for large resume content, but we'll try
-                import urllib.parse
-                # Convert payload to query string (only for smaller fields)
-                query_params = {
-                    'job_url': payload.get('job_url', ''),
-                    'company_name': payload.get('company_name', ''),
-                    'job_title': payload.get('job_title', ''),
-                    'location': payload.get('location', ''),
-                    'location_city': payload.get('location_city', ''),
-                    'location_state': payload.get('location_state', ''),
-                    'employment_type': payload.get('employment_type', ''),
-                    'user_id': str(payload.get('user_id', '')),
-                }
-                # For resume content, we'll need to send it separately or the webhook needs to be POST
-                # Build URL with query params
-                query_string = urllib.parse.urlencode(query_params)
-                get_url = f"{webhook_url}?{query_string}"
-                response = requests.get(get_url, headers=headers, stream=True, timeout=60)
+        # Try calling all webhooks, use first successful response
+        # But we'll try ALL webhooks to trigger them all, then use the first successful one
+        response = None
+        last_error = None
+        successful_webhook = None
+        errors = []
+        webhook_responses = []  # Store all responses
+        
+        for webhook_url in webhook_urls:
+            try:
+                # Log which webhook we're trying
+                print(f"[DEBUG] Attempting webhook: {webhook_url}")
+                # Try POST first (standard for webhooks with data)
+                webhook_response = requests.post(webhook_url, json=payload, headers=headers, stream=True, timeout=60)
+                print(f"[DEBUG] Webhook {webhook_url} responded with status: {webhook_response.status_code}")
                 
-                if response.status_code != 200:
-                    if client:
-                        client.close()
-                    return jsonify({
-                        "success": False, 
-                        "error": f"n8n Webhook failed: {response.text}\n\nNote: Your webhook is configured for GET requests, but resume content requires POST. Please configure your n8n webhook to accept POST requests in the webhook node settings."
-                    }), 502
-            elif response.status_code != 200:
-                if client:
-                    client.close()
-                return jsonify({
-                    "success": False, 
-                    "error": f"n8n Webhook failed (Status {response.status_code}): {response.text}"
-                }), 502
-        except requests.exceptions.RequestException as e:
+                # Check if response is successful
+                if webhook_response.status_code == 200:
+                    # Success! Store this response
+                    if not response:  # Use first successful response
+                        response = webhook_response
+                        successful_webhook = webhook_url
+                    print(f"[DEBUG] Webhook {webhook_url} succeeded!")
+                    # Continue to trigger other webhooks too, but don't break
+                    continue
+                
+                # If webhook is configured for GET, try GET with query parameters
+                elif webhook_response.status_code == 404 and "GET request" in webhook_response.text:
+                    # For GET requests, we need to send data as query parameters
+                    # Note: This won't work well for large resume content, but we'll try
+                    import urllib.parse
+                    query_params = {
+                        'job_url': payload.get('job_url', ''),
+                        'company_name': payload.get('company_name', ''),
+                        'job_title': payload.get('job_title', ''),
+                        'location': payload.get('location', ''),
+                        'location_city': payload.get('location_city', ''),
+                        'location_state': payload.get('location_state', ''),
+                        'employment_type': payload.get('employment_type', ''),
+                        'user_id': str(payload.get('user_id', '')),
+                    }
+                    query_string = urllib.parse.urlencode(query_params)
+                    get_url = f"{webhook_url}?{query_string}"
+                    webhook_response = requests.get(get_url, headers=headers, stream=True, timeout=60)
+                    
+                    if webhook_response.status_code == 200:
+                        if not response:  # Use first successful response for PDF generation
+                            response = webhook_response
+                            successful_webhook = webhook_url
+                        print(f"[DEBUG] Webhook {webhook_url} succeeded via GET! (continuing to trigger other webhooks)")
+                        # Continue to trigger other webhooks too, don't break
+                        continue
+                    else:
+                        # Try to parse n8n error response
+                        try:
+                            error_data = webhook_response.json()
+                            error_msg = error_data.get('message', webhook_response.text)
+                            hint = error_data.get('hint', '')
+                            if hint:
+                                error_msg += f"\n\n{hint}"
+                        except:
+                            error_msg = webhook_response.text
+                        errors.append(f"{webhook_url}: {error_msg}")
+                
+                # Non-200 status code
+                else:
+                    # Try to parse n8n error response for better error messages
+                    try:
+                        error_data = webhook_response.json()
+                        error_msg = error_data.get('message', webhook_response.text)
+                        hint = error_data.get('hint', '')
+                        if hint:
+                            error_msg += f"\n\n{hint}"
+                        full_error = f"Status {webhook_response.status_code}: {error_msg}"
+                    except:
+                        full_error = f"Status {webhook_response.status_code}: {webhook_response.text[:200]}"
+                    errors.append(f"{webhook_url}: {full_error}")
+                    print(f"[DEBUG] Webhook {webhook_url} failed: {full_error}")
+                    
+            except requests.exceptions.RequestException as e:
+                # Connection error for this webhook, try next one
+                error_msg = f"Connection failed - {str(e)}"
+                print(f"[DEBUG] Webhook {webhook_url} connection error: {error_msg}")
+                errors.append(f"{webhook_url}: {error_msg}")
+                continue
+        
+        # Check if we got a successful response from any webhook
+        if not response or not successful_webhook:
             if client:
                 client.close()
+            error_summary = "\n".join([f"  - {err}" for err in errors])
             return jsonify({
                 "success": False, 
-                "error": f"Failed to connect to n8n webhook: {str(e)}\n\nPlease check:\n1. Your webhook URL is correct\n2. Your n8n webhook is configured to accept POST requests\n3. Your network connection is working"
+                "error": f"All webhooks failed:\n{error_summary}\n\nPlease check:\n1. Your webhook URLs are correct\n2. Your n8n webhooks are configured to accept POST requests\n3. Your network connection is working\n4. Your n8n workflows are active"
             }), 502
             
         # 5. Save generated PDF to GridFS
@@ -328,20 +480,25 @@ def generate_resume(job_id):
         
         return jsonify({
             "success": True, 
-            "message": "Resume generated successfully",
-            "resume_id": str(generated_file_id)
+            "message": f"Resume generated successfully (via {successful_webhook})",
+            "resume_id": str(generated_file_id),
+            "webhook_used": successful_webhook
         })
 
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
+        error_msg = str(e)
+        if current_app.debug:
+            traceback.print_exc()
         if client:
             try:
                 client.close()
             except:
                 pass
+        return jsonify({
+            "success": False, 
+            "error": f"An error occurred while generating the resume: {error_msg}\n\nPlease check:\n1. Your n8n webhook is properly configured\n2. Your master resume is uploaded\n3. Your job details are complete"
+        }), 500
 
 @jobs.route('/api/download_resume/<file_id>', methods=['GET'])
 @login_required
@@ -382,19 +539,39 @@ def download_resume(file_id):
 def update_app_status(job_oid):
     client = None
     try:
+        # Check authentication
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": "Authentication required"
+            }), 401
+        
+        user_id = getattr(current_user, 'id', None)
+        if not user_id:
+            return jsonify({"success": False, "error": "User ID not found"}), 401
+        
         status = request.json.get('status')
         if not status:
             return jsonify({"success": False, "error": "Status required"}), 400
             
         client, db = get_db()
         apps_collection = db['Applications']
+        
+        # Update or create application record
         apps_collection.update_one(
-            {"user_id": current_user.id, "job_id": job_oid},
-            {"$set": {"status": status, "updated_at": datetime.now()}},
+            {"user_id": user_id, "job_id": job_oid},
+            {"$set": {
+                "status": status, 
+                "updated_at": datetime.now(),
+                "user_id": user_id,  # Ensure user_id is set on upsert
+                "job_id": job_oid   # Ensure job_id is set on upsert
+            }},
             upsert=True
         )
         return jsonify({"success": True})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if client:
@@ -405,16 +582,34 @@ def update_app_status(job_oid):
 def update_app_notes(job_oid):
     client = None
     try:
+        # Check authentication
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": "Authentication required"
+            }), 401
+        
+        user_id = getattr(current_user, 'id', None)
+        if not user_id:
+            return jsonify({"success": False, "error": "User ID not found"}), 401
+        
         notes = request.json.get('notes', '')
         client, db = get_db()
         apps_collection = db['Applications']
         apps_collection.update_one(
-            {"user_id": current_user.id, "job_id": job_oid},
-            {"$set": {"notes": notes, "updated_at": datetime.now()}},
+            {"user_id": user_id, "job_id": job_oid},
+            {"$set": {
+                "notes": notes, 
+                "updated_at": datetime.now(),
+                "user_id": user_id,  # Ensure user_id is set on upsert
+                "job_id": job_oid   # Ensure job_id is set on upsert
+            }},
             upsert=True
         )
         return jsonify({"success": True})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if client:
