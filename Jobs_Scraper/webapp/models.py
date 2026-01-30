@@ -26,7 +26,14 @@ class User(UserMixin):
 
     @staticmethod
     def get_by_email(db, email):
-        user_doc = db['Users'].find_one({"email": email})
+        # Normalize email for lookup (lowercase and trim)
+        email_normalized = email.strip().lower() if email else ""
+        # Try exact match first (for performance)
+        user_doc = db['Users'].find_one({"email": email_normalized})
+        if user_doc:
+            return User(user_doc)
+        # Fallback to case-insensitive search if exact match fails
+        user_doc = db['Users'].find_one({"email": {"$regex": f"^{email_normalized}$", "$options": "i"}})
         if user_doc:
             return User(user_doc)
         return None
@@ -61,6 +68,11 @@ class User(UserMixin):
         self.password_hash = new_password_hash
 
     def update_profile(self, db, name, email=None, n8n_webhook_url=None, n8n_api_key=None):
+        """
+        Update user profile information.
+        IMPORTANT: This method NEVER modifies passwords.
+        Passwords can ONLY be changed through update_password() method or /reset-password route.
+        """
         update_doc = {"name": name}
         if email:
             update_doc["email"] = email
@@ -68,7 +80,8 @@ class User(UserMixin):
             update_doc["n8n_webhook_url"] = n8n_webhook_url
         if n8n_api_key is not None:
             update_doc["n8n_api_key"] = n8n_api_key
-            
+        
+        # CRITICAL: password_hash is NOT in update_doc - passwords are NEVER changed here
         db['Users'].update_one(
             {"_id": ObjectId(self.id)},
             {"$set": update_doc}

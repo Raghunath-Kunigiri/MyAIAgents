@@ -14,24 +14,47 @@ export const LOGIN_URL = import.meta.env.VITE_LOGIN_URL || `${BACKEND_URL}/login
 // Prevent redirect loops
 let redirecting = false;
 export function redirectToLogin() {
+  const stack = new Error().stack;
+  console.log('[redirectToLogin] Called');
+  console.log('[redirectToLogin] Stack trace:', stack);
+  
   // Prevent multiple redirects
   if (redirecting) {
-    console.log('Already redirecting, skipping...');
+    console.log('[redirectToLogin] Already redirecting, skipping...');
     return;
   }
   
-  // Check if already on login page
+  // Check if already on login page or if we're authenticated
   const currentUrl = window.location.href;
-  if (currentUrl.includes('/login') || currentUrl.includes('localhost:5000')) {
-    console.log('Already on login page or Flask backend, skipping redirect');
+  const pathname = window.location.pathname;
+  
+  console.log('[redirectToLogin] Current URL:', currentUrl, 'Pathname:', pathname);
+  
+  // Don't redirect if already on login page
+  if (currentUrl.includes('/login') || pathname === '/login' || currentUrl.includes('localhost:5000/login')) {
+    console.log('[redirectToLogin] Already on login page or Flask backend, skipping redirect');
+    redirecting = false; // Reset flag if already on login
     return;
   }
   
-  console.log('Redirecting to login:', LOGIN_URL);
+  console.log('[redirectToLogin] Will redirect to login');
   redirecting = true;
   
+  // Reset redirecting flag after a delay in case redirect fails
+  setTimeout(() => {
+    redirecting = false;
+  }, 3000);
+  
   // Use replace to avoid adding to history
-  window.location.replace(LOGIN_URL);
+  // Use proxy path if we're on the frontend
+  const targetUrl = (window.location.port === '3000' || window.location.port === '3001') 
+    ? '/login' 
+    : LOGIN_URL;
+  
+  console.log('[redirectToLogin] Redirecting to:', targetUrl);
+  
+  // Force redirect immediately
+  window.location.replace(targetUrl);
 }
 
 // Helper function to get API URL

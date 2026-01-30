@@ -40,6 +40,32 @@ def create_app():
     app = Flask(__name__, template_folder='../templates')
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-professional")
     
+    # Handle CORS preflight requests
+    @app.before_request
+    def handle_preflight():
+        from flask import request, make_response
+        if request.method == "OPTIONS":
+            response = make_response()
+            headers = response.headers
+            origin = request.headers.get('Origin')
+            allowed_origin = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+            
+            # Set CORS headers
+            if allowed_origin == '*' and origin:
+                headers.add('Access-Control-Allow-Origin', origin)
+            elif allowed_origin:
+                headers.add('Access-Control-Allow-Origin', allowed_origin)
+            elif origin and origin.startswith('http://localhost'):
+                headers.add('Access-Control-Allow-Origin', origin)
+            else:
+                headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+            
+            headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            headers.add('Access-Control-Allow-Credentials', 'true')
+            headers.add('Access-Control-Max-Age', '3600')
+            return response
+    
     # Enable CORS for React frontend
     @app.after_request
     def after_request(response):
@@ -55,6 +81,9 @@ def create_app():
         # If specific FRONTEND_URL is set, use it
         elif allowed_origin:
             response.headers.add('Access-Control-Allow-Origin', allowed_origin)
+        # Allow localhost origins for development
+        elif origin and origin.startswith('http://localhost'):
+            response.headers.add('Access-Control-Allow-Origin', origin)
         # Fallback to request origin for same-domain deployments
         elif origin:
             response.headers.add('Access-Control-Allow-Origin', origin)
@@ -65,6 +94,9 @@ def create_app():
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
+        
+        # Set SameSite=None for cross-origin cookies (if using HTTPS)
+        # For localhost development, SameSite=Lax should work
         return response
     
     # Initialize Login Manager
@@ -88,28 +120,58 @@ def create_app():
     
     @login_manager.user_loader
     def load_user(user_id):
-        client, db = get_db()
-        user = User.get_by_id(db, user_id)
-        client.close()
-        return user
+        """Load user by ID. Return None on any DB failure so API requests still reach routes."""
+        client = None
+        try:
+            client, db = get_db()
+            user = User.get_by_id(db, user_id)
+            return user
+        except Exception:
+            return None
+        finally:
+            if client:
+                client.close()
 
     # Custom Session Protection (Single Session Enforcement)
+    # Skip for API calls and static files to avoid redirect loops
     @app.before_request
     def check_session_token():
+        from flask import request, session
+        # Skip session check for API calls, OPTIONS requests, and login/register pages
+        if (request.path.startswith('/api/') or 
+            request.method == 'OPTIONS' or
+            request.path.startswith('/login') or
+            request.path.startswith('/register') or
+            request.path.startswith('/static/')):
+            return
+        
         if current_user.is_authenticated:
-            client, db = get_db()
-            user = User.get_by_id(db, current_user.id)
-            client.close()
+            client = None
+            try:
+                client, db = get_db()
+                user = User.get_by_id(db, current_user.id)
+            except Exception:
+                user = None
+            finally:
+                if client:
+                    client.close()
             
             # If the session token in the DB doesn't match the current user's session token
             # (which we store in the session), log them out.
             # Flask-Login stores the user object in current_user.
             # We need to store the expected token in the session during login.
-            from flask import session
             if not user or user.session_token != session.get('session_token'):
                 from flask_login import logout_user
                 logout_user()
                 flash("Your account was logged in from another location.")
+                # For API requests, return JSON error instead of redirect
+                if request.path.startswith('/api/'):
+                    from flask import jsonify
+                    return jsonify({
+                        "success": False,
+                        "error": "Session expired",
+                        "redirect": "/login"
+                    }), 401
                 return redirect(url_for('auth.login'))
 
     # Register Blueprints

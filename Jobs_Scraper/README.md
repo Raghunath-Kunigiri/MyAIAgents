@@ -107,9 +107,11 @@ Frontend will run on: `http://localhost:3000` (or next available port)
 python create_test_user.py
 ```
 
-This will create a user with:
+This will create or update a user with:
 - Email: `test@example.com`
 - Password: `test123`
+
+**Note:** If the user already exists, the script will update the password hash to ensure credentials are always correct. Run this script whenever you need to reset or fix login credentials.
 
 ## 📁 Project Structure
 

@@ -25,10 +25,22 @@ export function useJobs(): UseJobsReturn {
       if (!response.ok) {
         // If unauthorized, redirect to Flask login
         if (response.status === 401 || response.status === 302) {
+          console.warn('[useJobs] Unauthorized - redirecting to login');
           redirectToLogin();
           return; // Stop execution
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Try to get error message from response
+        let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMsg = errorData.error;
+          }
+        } catch (e) {
+          // If response is not JSON, use default error message
+        }
+        console.error('[useJobs] Request failed:', errorMsg);
+        throw new Error(errorMsg);
       }
       
       // Check if response is JSON
@@ -43,19 +55,33 @@ export function useJobs(): UseJobsReturn {
       }
       
       const data = await response.json();
+      console.log('[useJobs] API response:', data);
       
       if (data.success) {
-        setJobs(data.jobs || []);
+        const jobsArray = data.jobs || [];
+        console.log('[useJobs] Jobs loaded successfully:', jobsArray.length, 'jobs');
+        if (jobsArray.length === 0) {
+          console.warn('[useJobs] No jobs returned from API - database might be empty');
+        }
+        setJobs(jobsArray);
       } else {
-        if (data.error === 'Authentication required' || data.redirect) {
+        // Only redirect if explicitly told to (401 already handled above)
+        if (data.error === 'Authentication required' || data.redirect === '/login') {
+          console.warn('[useJobs] Server indicated auth required - redirecting');
           redirectToLogin();
           return; // Stop execution
         }
+        // Other errors - just log and set error state
+        console.error('[useJobs] Failed to load jobs:', data.error);
         throw new Error(data.error || 'Failed to load jobs');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[useJobs] Error fetching jobs:', errorMessage);
+      setError(errorMessage);
       setJobs([]);
+      // Don't redirect on network errors - let the error be displayed
+      // Only redirect on actual 401 responses (which are handled above)
     } finally {
       setLoading(false);
     }

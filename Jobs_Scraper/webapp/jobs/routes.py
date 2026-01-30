@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, send_file, redirect, current_app
-from flask_login import login_required, current_user
+# Authentication removed - login_required and current_user no longer needed
 from webapp import get_db, MONGODB_CONFIG
 from bson import ObjectId
 from datetime import datetime
@@ -11,44 +11,128 @@ import os
 jobs = Blueprint('jobs', __name__)
 
 @jobs.route('/')
-@login_required
 def dashboard():
     # Redirect to React frontend (for development)
     # In production, if frontend is deployed separately, redirect to FRONTEND_URL
     # If frontend is served from Flask, we could serve the built files here
+    from flask import render_template_string
     frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-    return redirect(frontend_url)
+    
+    # Check if frontend is reachable before redirecting
+    try:
+        response = requests.get(frontend_url, timeout=2)
+        if response.status_code == 200:
+            return redirect(frontend_url)
+    except (requests.exceptions.RequestException, requests.exceptions.Timeout):
+        # Frontend is not running, show helpful message
+        message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Frontend Not Running - JobTracker Pro</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: #333;
+                }}
+                .container {{
+                    background: white;
+                    padding: 3rem;
+                    border-radius: 12px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    max-width: 600px;
+                    text-align: center;
+                }}
+                h1 {{
+                    color: #667eea;
+                    margin-bottom: 1rem;
+                }}
+                p {{
+                    color: #666;
+                    line-height: 1.6;
+                    margin-bottom: 1.5rem;
+                }}
+                .code {{
+                    background: #f5f5f5;
+                    padding: 1rem;
+                    border-radius: 6px;
+                    font-family: 'Courier New', monospace;
+                    margin: 1rem 0;
+                    color: #333;
+                }}
+                .button {{
+                    display: inline-block;
+                    background: #667eea;
+                    color: white;
+                    padding: 0.75rem 1.5rem;
+                    border-radius: 6px;
+                    text-decoration: none;
+                    margin-top: 1rem;
+                    transition: background 0.2s;
+                }}
+                .button:hover {{
+                    background: #5568d3;
+                }}
+                .link {{
+                    color: #667eea;
+                    text-decoration: none;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 Frontend Not Running</h1>
+                <p>The React frontend is not currently running. To start it:</p>
+                <div class="code">
+                    cd frontend<br>
+                    npm run dev
+                </div>
+                <p>Once started, the frontend will be available at:</p>
+                <div class="code">{frontend_url}</div>
+                <p>Or you can access the backend directly:</p>
+                <a href="/login" class="button">Go to Login</a><br>
+                <a href="/profile" class="link" style="margin-top: 1rem; display: inline-block;">View Profile</a>
+            </div>
+        </body>
+        </html>
+        """
+        return render_template_string(message), 503
 
 @jobs.route('/api/stats')
-@login_required
 def api_stats():
     client = None
     try:
-        # Check if user is authenticated
-        if not current_user.is_authenticated:
+        print(f"[API] /api/stats called - connecting to MongoDB...")
+        try:
+            client, db = get_db()
+            print(f"[API] MongoDB connection successful")
+        except Exception as db_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"[API] MongoDB connection failed: {db_error}")
+            print(error_trace)
             return jsonify({
                 "success": False,
-                "error": "Authentication required",
-                "redirect": "/login"
-            }), 401
+                "error": f"MongoDB connection failed: {str(db_error)}"
+            }), 500
         
-        client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
         apps_collection = db['Applications']
+        print(f"[API] Using collection: {MONGODB_CONFIG['collection_name']}")
         
         total_jobs = collection.count_documents({})
         unique_companies = len(collection.distinct("company_name"))
         
-        # Status stats - get user_id safely
-        user_id = getattr(current_user, 'id', None) if current_user.is_authenticated else None
-        if not user_id:
-            return jsonify({
-                "success": False,
-                "error": "User ID not found"
-            }), 401
+        # Status stats - get all applications (no user filtering)
+        user_id = None
         
         pipeline = [
-            {"$match": {"user_id": user_id}},
             {"$group": {"_id": "$status", "count": {"$sum": 1}}}
         ]
         status_counts = {item['_id']: item['count'] for item in apps_collection.aggregate(pipeline) if item['_id'] is not None}
@@ -82,9 +166,13 @@ def api_stats():
         error_trace = traceback.format_exc()
         print("ERROR in api_stats:")
         print(error_trace)
+        # Return error message that's safe to show to frontend
+        error_msg = str(e)
+        if "MongoDB" in error_msg or "connection" in error_msg.lower():
+            error_msg = "Database connection error. Please check if MongoDB is accessible."
         return jsonify({
             "success": False,
-            "error": str(e),
+            "error": error_msg,
             "traceback": error_trace if current_app.debug else None
         }), 500
     finally:
@@ -92,29 +180,25 @@ def api_stats():
             client.close()
 
 @jobs.route('/api/jobs')
-@login_required
 def api_jobs():
     client = None
     try:
-        # Check if user is authenticated
-        if not current_user.is_authenticated:
-            return jsonify({
-                "success": False,
-                "error": "Authentication required",
-                "redirect": "/login"
-            }), 401
-        
+        print(f"[API] /api/jobs called - connecting to MongoDB...")
         client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
+        print(f"[API] Using collection: {MONGODB_CONFIG['collection_name']}")
         
         # Get all jobs, with deduplication by job_id
         # Strategy: Get all jobs first, then deduplicate in Python for better error handling
         try:
             # Get all jobs sorted by newest first
+            print(f"[API] Fetching jobs from collection...")
             all_jobs_raw = list(collection.find({}).sort("_id", -1).limit(1000))
+            print(f"[API] Found {len(all_jobs_raw)} raw jobs in database")
         except Exception as e:
             import traceback
             traceback.print_exc()
+            print(f"[API] Error fetching jobs: {e}")
             return jsonify({
                 "success": False,
                 "error": f"Error fetching jobs: {str(e)}"
@@ -135,19 +219,10 @@ def api_jobs():
                 # Jobs without job_id - include them all (use _id as unique identifier)
                 all_jobs.append(job)
         
-        # Fetch user applications in one query
-        # Applications collection uses job_id field which should match job._id
+        # Fetch all applications (no user filtering)
         apps_collection = db['Applications']
         try:
-            # Safely get user ID
-            user_id = getattr(current_user, 'id', None) if current_user.is_authenticated else None
-            if not user_id:
-                return jsonify({
-                    "success": False,
-                    "error": "User ID not found"
-                }), 401
-            
-            user_apps_list = list(apps_collection.find({"user_id": user_id}))
+            user_apps_list = list(apps_collection.find({}))
             # Create lookup dict using job_id (which should be the ObjectId of the job)
             user_apps = {}
             for app in user_apps_list:
@@ -156,11 +231,12 @@ def api_jobs():
                     # Store with both ObjectId string and regular string for lookup flexibility
                     user_apps[str(job_id)] = app
         except Exception as e:
-            print(f"Error fetching user applications: {e}")
+            print(f"Error fetching applications: {e}")
             user_apps = {}
         
         serialized_jobs = []
         
+        print(f"[API] Processing {len(all_jobs)} jobs after deduplication...")
         for job in all_jobs:
             job_oid = str(job['_id'])
             serialized_job = {
@@ -192,6 +268,7 @@ def api_jobs():
                 
             serialized_jobs.append(serialized_job)
         
+        print(f"[API] Returning {len(serialized_jobs)} serialized jobs")
         return jsonify({
             "success": True, 
             "jobs": serialized_jobs,
@@ -202,9 +279,13 @@ def api_jobs():
         error_trace = traceback.format_exc()
         print("ERROR in api_jobs:")
         print(error_trace)
+        # Return error message that's safe to show to frontend
+        error_msg = str(e)
+        if "MongoDB" in error_msg or "connection" in error_msg.lower():
+            error_msg = "Database connection error. Please check if MongoDB is accessible."
         return jsonify({
             "success": False,
-            "error": str(e),
+            "error": error_msg,
             "traceback": error_trace if current_app.debug else None
         }), 500
     finally:
@@ -213,13 +294,13 @@ def api_jobs():
 
 # Simplified other routes logic...
 @jobs.route('/api/check_master_resume')
-@login_required
 def check_master_resume():
     client = None
     try:
         client, db = get_db()
         fs = gridfs.GridFS(db)
-        master = fs.find_one({"metadata.type": "master_resume", "metadata.user_id": current_user.id})
+        # Get any master resume (no user filtering)
+        master = fs.find_one({"metadata.type": "master_resume"})
         exists = master is not None
         filename = master.filename if exists else None
         return jsonify({"exists": exists, "filename": filename})
@@ -230,7 +311,6 @@ def check_master_resume():
             client.close()
 
 @jobs.route('/api/upload_master_resume', methods=['POST'])
-@login_required
 def upload_master_resume():
     client = None
     try:
@@ -239,11 +319,11 @@ def upload_master_resume():
         file = request.files['resume']
         client, db = get_db()
         fs = gridfs.GridFS(db)
-        # Cleanup old
-        for f in fs.find({"metadata.type": "master_resume", "metadata.user_id": current_user.id}):
+        # Cleanup old (no user filtering)
+        for f in fs.find({"metadata.type": "master_resume"}):
             fs.delete(f._id)
-        # Save new
-        fs.put(file, filename=file.filename, metadata={"type": "master_resume", "user_id": current_user.id})
+        # Save new (no user_id in metadata)
+        fs.put(file, filename=file.filename, metadata={"type": "master_resume"})
         return jsonify({"success": True, "message": "Uploaded successfully"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -252,18 +332,11 @@ def upload_master_resume():
             client.close()
 
 @jobs.route('/api/generate_resume/<job_id>', methods=['POST'])
-@login_required
 def generate_resume(job_id):
     """Trigger n8n webhook to generate resume for current user"""
     client = None
     try:
-        # Check if user is authenticated
-        if not current_user.is_authenticated:
-            return jsonify({
-                "success": False,
-                "error": "Authentication required",
-                "redirect": "/login"
-            }), 401
+        # Authentication removed - proceed without user check
         
         client, db = get_db()
         collection = db[MONGODB_CONFIG["collection_name"]]
@@ -283,10 +356,9 @@ def generate_resume(job_id):
                 client.close()
             return jsonify({"success": False, "error": "Job not found"}), 404
             
-        # 2. Get User's Master Resume
+        # 2. Get Master Resume (no user filtering)
         master_resume = fs.find_one({
-            "metadata.type": "master_resume",
-            "metadata.user_id": current_user.id
+            "metadata.type": "master_resume"
         })
         
         if not master_resume:
@@ -317,16 +389,17 @@ def generate_resume(job_id):
             "remote_option": "on-site", 
             "resume_content": resume_content,
             "resume_filename": master_resume.filename,
-            "user_id": current_user.id
+            "user_id": None
         }
         
         # 4. Call n8n Webhooks (both production and local)
         # Define webhook URLs - user's configured URL + additional test webhooks
         webhook_urls = []
         
-        # Add user's configured webhook URL
-        if current_user.n8n_webhook_url:
-            webhook_urls.append(current_user.n8n_webhook_url)
+        # Webhook URLs - check environment variable or use default
+        n8n_webhook_url = os.environ.get('N8N_WEBHOOK_URL')
+        if n8n_webhook_url:
+            webhook_urls.append(n8n_webhook_url)
         
         # Add additional webhook URLs for testing
         additional_webhooks = [
@@ -345,9 +418,10 @@ def generate_resume(job_id):
             return jsonify({"success": False, "error": "N8N Webhook URL not configured. Please go to your profile and set it up."}), 400
             
         headers = {}
-        if current_user.n8n_api_key:
-            headers['X-N8N-API-KEY'] = current_user.n8n_api_key
-            # Alternative: headers['Authorization'] = f"Bearer {current_user.n8n_api_key}"
+        n8n_api_key = os.environ.get('N8N_API_KEY')
+        if n8n_api_key:
+            headers['X-N8N-API-KEY'] = n8n_api_key
+            # Alternative: headers['Authorization'] = f"Bearer {n8n_api_key}"
         
         # Try calling all webhooks, use first successful response
         # But we'll try ALL webhooks to trigger them all, then use the first successful one
@@ -461,14 +535,14 @@ def generate_resume(job_id):
                 "type": "generated_resume", 
                 "job_id": job_id,
                 "company": job.get('company_name'),
-                "user_id": current_user.id 
+                "user_id": None
             }
         )
         
         # 6. Update Applications Collection
         applications_collection = db['Applications']
         applications_collection.update_one(
-            {"user_id": current_user.id, "job_id": job_id},
+            {"job_id": job_id},
             {"$set": {
                 "resume_id": str(generated_file_id),
                 "resume_filename": filename,
@@ -501,7 +575,6 @@ def generate_resume(job_id):
         }), 500
 
 @jobs.route('/api/download_resume/<file_id>', methods=['GET'])
-@login_required
 def download_resume(file_id):
     """Download a file from GridFS"""
     client = None
@@ -535,21 +608,10 @@ def download_resume(file_id):
         return f"Error downloading content: {str(e)}", 404
 
 @jobs.route('/api/update_app_status/<job_oid>', methods=['POST'])
-@login_required
 def update_app_status(job_oid):
     client = None
     try:
-        # Check authentication
-        if not current_user.is_authenticated:
-            return jsonify({
-                "success": False,
-                "error": "Authentication required"
-            }), 401
-        
-        user_id = getattr(current_user, 'id', None)
-        if not user_id:
-            return jsonify({"success": False, "error": "User ID not found"}), 401
-        
+        # Authentication removed - no user filtering
         status = request.json.get('status')
         if not status:
             return jsonify({"success": False, "error": "Status required"}), 400
@@ -557,13 +619,12 @@ def update_app_status(job_oid):
         client, db = get_db()
         apps_collection = db['Applications']
         
-        # Update or create application record
+        # Update or create application record (no user filtering)
         apps_collection.update_one(
-            {"user_id": user_id, "job_id": job_oid},
+            {"job_id": job_oid},
             {"$set": {
                 "status": status, 
                 "updated_at": datetime.now(),
-                "user_id": user_id,  # Ensure user_id is set on upsert
                 "job_id": job_oid   # Ensure job_id is set on upsert
             }},
             upsert=True
@@ -578,30 +639,18 @@ def update_app_status(job_oid):
             client.close()
 
 @jobs.route('/api/update_app_notes/<job_oid>', methods=['POST'])
-@login_required
 def update_app_notes(job_oid):
     client = None
     try:
-        # Check authentication
-        if not current_user.is_authenticated:
-            return jsonify({
-                "success": False,
-                "error": "Authentication required"
-            }), 401
-        
-        user_id = getattr(current_user, 'id', None)
-        if not user_id:
-            return jsonify({"success": False, "error": "User ID not found"}), 401
-        
+        # Authentication removed - no user filtering
         notes = request.json.get('notes', '')
         client, db = get_db()
         apps_collection = db['Applications']
         apps_collection.update_one(
-            {"user_id": user_id, "job_id": job_oid},
+            {"job_id": job_oid},
             {"$set": {
                 "notes": notes, 
                 "updated_at": datetime.now(),
-                "user_id": user_id,  # Ensure user_id is set on upsert
                 "job_id": job_oid   # Ensure job_id is set on upsert
             }},
             upsert=True
@@ -616,7 +665,6 @@ def update_app_notes(job_oid):
             client.close()
 
 @jobs.route('/api/export_jobs')
-@login_required
 def export_jobs():
     import csv
     from io import StringIO
@@ -629,7 +677,7 @@ def export_jobs():
         all_jobs = list(collection.find({}).sort("_id", -1).limit(1000))
         
         apps_collection = db['Applications']
-        user_apps = {str(app['job_id']): app for app in apps_collection.find({"user_id": current_user.id})}
+        user_apps = {str(app['job_id']): app for app in apps_collection.find({})}
         
         si = StringIO()
         cw = csv.writer(si)

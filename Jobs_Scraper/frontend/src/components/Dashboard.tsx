@@ -36,12 +36,22 @@ async function uploadMasterResume(file: File): Promise<void> {
 }
 
 export function Dashboard() {
-  const { jobs, loading: jobsLoading, refetch: refetchJobs } = useJobs();
-  const { stats, loading: statsLoading, refetch: refetchStats } = useStats();
+  const { jobs, loading: jobsLoading, refetch: refetchJobs, error: jobsError } = useJobs();
+  const { stats, loading: statsLoading, refetch: refetchStats, error: statsError } = useStats();
   const [selectedStatus, setSelectedStatus] = useState<JobStatus>('All');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isSlideOverOpen, setIsSlideOverOpen] = useState(false);
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
+
+  // Log errors for debugging
+  useEffect(() => {
+    if (jobsError) {
+      console.error('[Dashboard] Jobs error:', jobsError);
+    }
+    if (statsError) {
+      console.error('[Dashboard] Stats error:', statsError);
+    }
+  }, [jobsError, statsError]);
 
   // Calculate status counts from jobs
   const statusCounts = useMemo(() => {
@@ -55,13 +65,28 @@ export function Dashboard() {
     return counts;
   }, [jobs]);
   
+  // Debug: Log component lifecycle
+  useEffect(() => {
+    console.log('[Dashboard] Component mounted');
+    return () => {
+      console.log('[Dashboard] Component unmounting');
+    };
+  }, []);
+
   // Debug: Log jobs count
   useEffect(() => {
-    console.log('Jobs loaded:', jobs.length);
+    console.log('[Dashboard] Jobs loaded:', jobs.length);
     if (jobs.length > 0) {
-      console.log('First job sample:', jobs[0]);
+      console.log('[Dashboard] First job sample:', jobs[0]);
     }
   }, [jobs]);
+
+  // Debug: Log stats
+  useEffect(() => {
+    if (stats) {
+      console.log('[Dashboard] Stats loaded:', stats);
+    }
+  }, [stats]);
 
   const handleJobClick = (job: Job) => {
     setSelectedJob(job);
@@ -139,6 +164,19 @@ export function Dashboard() {
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* API error banner */}
+        {(jobsError || statsError) && (
+          <div className="mb-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-red-800 text-sm flex items-center justify-between gap-4">
+            <span>{jobsError || statsError}</span>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-medium"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {/* Stats cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <motion.div

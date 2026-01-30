@@ -25,10 +25,20 @@ export function useStats(): UseStatsReturn {
       if (!response.ok) {
         // If unauthorized, redirect to Flask login
         if (response.status === 401 || response.status === 302) {
+          console.warn('[useStats] Unauthorized - redirecting to login');
           redirectToLogin();
           return; // Stop execution
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Try to get error message from response body
+        let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) errorMsg = errorData.error;
+        } catch {
+          // response not JSON
+        }
+        console.error('[useStats] Request failed:', errorMsg);
+        throw new Error(errorMsg);
       }
       
       // Check if response is JSON
@@ -45,17 +55,26 @@ export function useStats(): UseStatsReturn {
       const data = await response.json();
       
       if (data.success) {
+        console.log('[useStats] Stats loaded successfully:', data.stats);
         setStats(data.stats);
       } else {
-        if (data.error === 'Authentication required' || data.redirect) {
+        // Only redirect if explicitly told to (401 already handled above)
+        if (data.error === 'Authentication required' || data.redirect === '/login') {
+          console.warn('[useStats] Server indicated auth required - redirecting');
           redirectToLogin();
           return; // Stop execution
         }
+        // Other errors - just log and set error state
+        console.error('[useStats] Failed to load stats:', data.error);
         throw new Error(data.error || 'Failed to load stats');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[useStats] Error fetching stats:', errorMessage);
+      setError(errorMessage);
       setStats(null);
+      // Don't redirect on network errors - let the error be displayed
+      // Only redirect on actual 401 responses (which are handled above)
     } finally {
       setLoading(false);
     }
