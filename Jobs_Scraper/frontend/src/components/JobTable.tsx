@@ -13,7 +13,6 @@ interface JobTableProps {
   onStatusFilterChange: (status: JobStatus) => void;
   onJobClick: (job: Job) => void;
   onStatusChange: (jobId: string, status: JobStatus) => void;
-  onResumeGenerated: () => void;
   statusCounts: Record<string, number>;
 }
 
@@ -38,7 +37,6 @@ export function JobTable({
   onStatusFilterChange,
   onJobClick,
   onStatusChange,
-  onResumeGenerated,
   statusCounts,
 }: JobTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,7 +179,6 @@ export function JobTable({
                     job={job}
                     onStatusChange={onStatusChange}
                     onJobClick={onJobClick}
-                    onResumeGenerated={onResumeGenerated}
                   />
                 ))
               )}

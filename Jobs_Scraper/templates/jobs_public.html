@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Links – Public</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    .header {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: white;
+      padding: 1.5rem 1rem;
+      text-align: center;
+    }
+    .header h1 { margin: 0; font-size: 1.5rem; }
+    .header p { margin: 0.25rem 0 0; opacity: 0.9; font-size: 0.9rem; }
+    .container { max-width: 800px; margin: 0 auto; padding: 1rem; }
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+    .job-list { list-style: none; padding: 0; margin: 0; }
+    .job-item {
+      background: white;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .job-item a {
+      color: #4f46e5;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .job-item a:hover { text-decoration: underline; }
+    .job-meta { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; }
+    .count { font-size: 0.9rem; color: #64748b; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Job Links</h1>
+    <p>Public list – no login required</p>
+  </div>
+  <div class="container">
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% else %}
+      <p class="count">{{ jobs|length }} job{{ 's' if jobs|length != 1 else '' }}</p>
+      <ul class="job-list">
+        {% for job in jobs %}
+          <li class="job-item">
+            <a href="{{ job.job_url or '#' }}" target="_blank" rel="noopener">{{ job.job_title }}</a>
+            <div class="job-meta">{{ job.company_name }}{% if job.location_full %} · {{ job.location_full }}{% endif %}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</body>
+</html>

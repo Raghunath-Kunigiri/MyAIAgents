@@ -37,8 +37,13 @@ def get_db():
         raise
 
 def create_app():
-    app = Flask(__name__, template_folder='../templates')
+    # Template folder is one level up from webapp (project root) so Flask finds templates/
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _templates = os.path.join(_root, 'templates')
+    _react_dist = os.path.join(_root, 'frontend', 'dist')
+    app = Flask(__name__, template_folder=_templates)
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-professional")
+    app.config['REACT_DIST'] = _react_dist
     
     # Handle CORS preflight requests
     @app.before_request
@@ -180,5 +185,22 @@ def create_app():
 
     from webapp.jobs.routes import jobs as jobs_blueprint
     app.register_blueprint(jobs_blueprint)
+
+    # On Vercel (and when frontend is built): serve React app for non-API routes
+    react_dist = app.config['REACT_DIST']
+    if os.path.isdir(react_dist) and os.path.isfile(os.path.join(react_dist, 'index.html')):
+        from flask import send_from_directory
+        @app.route('/assets/<path:filename>')
+        def serve_react_assets(filename):
+            return send_from_directory(os.path.join(react_dist, 'assets'), filename)
+        @app.route('/<path:path>')
+        def serve_react_app(path):
+            if path.startswith('api/'):
+                from flask import abort
+                abort(404)
+            filepath = os.path.join(react_dist, path)
+            if os.path.isfile(filepath):
+                return send_from_directory(react_dist, path)
+            return send_from_directory(react_dist, 'index.html')
 
     return app

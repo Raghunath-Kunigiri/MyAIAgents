@@ -1,39 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Briefcase, Building2, RefreshCw, Download, FileText } from 'lucide-react';
+import { Briefcase, Building2, RefreshCw, Download } from 'lucide-react';
 import { Job, JobStatus } from '../types';
 import { useJobs } from '../hooks/useJobs';
 import { useStats } from '../hooks/useStats';
 import { StatCard } from './StatCard';
 import { JobTable } from './JobTable';
 import { SlideOverModal } from './SlideOverModal';
-import { FileUpload } from './FileUpload';
 import { exportJobs } from '../services/api';
-import { redirectToLogin } from '../config';
-
-async function uploadMasterResume(file: File): Promise<void> {
-  const formData = new FormData();
-  formData.append('resume', file);
-  
-  const response = await fetch('/api/upload_master_resume', {
-    method: 'POST',
-    credentials: 'include', // Include cookies for authentication
-    body: formData,
-  });
-  
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 302) {
-      redirectToLogin();
-      return; // Stop execution
-    }
-    throw new Error(`HTTP ${response.status}`);
-  }
-  
-  const data = await response.json();
-  if (!data.success) {
-    throw new Error(data.error || 'Upload failed');
-  }
-}
 
 export function Dashboard() {
   const { jobs, loading: jobsLoading, refetch: refetchJobs, error: jobsError } = useJobs();
@@ -41,7 +15,6 @@ export function Dashboard() {
   const [selectedStatus, setSelectedStatus] = useState<JobStatus>('All');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isSlideOverOpen, setIsSlideOverOpen] = useState(false);
-  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
 
   // Log errors for debugging
   useEffect(() => {
@@ -108,19 +81,8 @@ export function Dashboard() {
     refetchStats();
   };
 
-  const handleResumeUploaded = async () => {
-    setIsResumeModalOpen(false);
-    alert('Resume uploaded successfully!');
-    // Optionally refresh data
-  };
-
   const handleNotesSaved = () => {
     refetchJobs();
-  };
-
-  const handleResumeGenerated = () => {
-    refetchJobs();
-    refetchStats();
   };
 
   return (
@@ -136,13 +98,6 @@ export function Dashboard() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsResumeModalOpen(true)}
-                className="px-4 py-2 rounded-xl border-2 border-gray-200 font-semibold text-sm text-gray-700 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                Resume Settings
-              </button>
               <button
                 onClick={exportJobs}
                 className="px-4 py-2 rounded-xl border-2 border-gray-200 font-semibold text-sm text-gray-700 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-2"
@@ -217,7 +172,6 @@ export function Dashboard() {
             onStatusFilterChange={setSelectedStatus}
             onJobClick={handleJobClick}
             onStatusChange={handleStatusChange}
-            onResumeGenerated={handleResumeGenerated}
             statusCounts={statusCounts}
           />
         </motion.div>
@@ -230,28 +184,6 @@ export function Dashboard() {
         job={selectedJob}
         onNotesSaved={handleNotesSaved}
       />
-
-      {/* Resume upload modal */}
-      {isResumeModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Resume Settings</h2>
-              <button
-                onClick={() => setIsResumeModalOpen(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
-              >
-                ×
-              </button>
-            </div>
-            <FileUpload onUpload={uploadMasterResume} />
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,108 +1,89 @@
-from flask import Blueprint, jsonify, request, send_file, redirect, current_app
+from flask import Blueprint, jsonify, request, send_file, redirect, current_app, render_template, send_from_directory
 # Authentication removed - login_required and current_user no longer needed
 from webapp import get_db, MONGODB_CONFIG
 from bson import ObjectId
 from datetime import datetime
 import gridfs
 import io
-import requests
 import os
+import requests
 
 jobs = Blueprint('jobs', __name__)
 
+
+def _get_public_jobs_list():
+    """Fetch jobs for the public page (title, company, url, location only). Returns (jobs, error)."""
+    client = None
+    try:
+        client, db = get_db()
+        collection = db[MONGODB_CONFIG["collection_name"]]
+        all_jobs_raw = list(collection.find({}).sort("_id", -1).limit(1000))
+        seen = set()
+        out = []
+        for job in all_jobs_raw:
+            jid = job.get('job_id')
+            if jid is not None:
+                key = str(jid)
+                if key in seen:
+                    continue
+                seen.add(key)
+            out.append({
+                "job_title": job.get("job_title") or "Job",
+                "company_name": job.get("company_name") or "—",
+                "job_url": job.get("job_url"),
+                "location_full": job.get("location_full") or "",
+            })
+        return out, None
+    except Exception as e:
+        msg = str(e)
+        if "MongoDB" in msg or "connection" in msg.lower():
+            msg = "Database connection error. Please try again later."
+        return [], msg
+    finally:
+        if client:
+            client.close()
+
+
 @jobs.route('/')
 def dashboard():
-    # Redirect to React frontend (for development)
-    # In production, if frontend is deployed separately, redirect to FRONTEND_URL
-    # If frontend is served from Flask, we could serve the built files here
-    from flask import render_template_string
+    # On Vercel (or when frontend/dist exists): serve the built React app
+    react_dist = current_app.config.get('REACT_DIST')
+    if react_dist and os.path.isfile(os.path.join(react_dist, 'index.html')):
+        from flask import send_from_directory
+        return send_from_directory(react_dist, 'index.html')
+    # Local dev: redirect to frontend if reachable
     frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-    
-    # Check if frontend is reachable before redirecting
     try:
         response = requests.get(frontend_url, timeout=2)
         if response.status_code == 200:
             return redirect(frontend_url)
     except (requests.exceptions.RequestException, requests.exceptions.Timeout):
-        # Frontend is not running, show helpful message
-        message = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Frontend Not Running - JobTracker Pro</title>
-            <style>
-                body {{
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    margin: 0;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: #333;
-                }}
-                .container {{
-                    background: white;
-                    padding: 3rem;
-                    border-radius: 12px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    max-width: 600px;
-                    text-align: center;
-                }}
-                h1 {{
-                    color: #667eea;
-                    margin-bottom: 1rem;
-                }}
-                p {{
-                    color: #666;
-                    line-height: 1.6;
-                    margin-bottom: 1.5rem;
-                }}
-                .code {{
-                    background: #f5f5f5;
-                    padding: 1rem;
-                    border-radius: 6px;
-                    font-family: 'Courier New', monospace;
-                    margin: 1rem 0;
-                    color: #333;
-                }}
-                .button {{
-                    display: inline-block;
-                    background: #667eea;
-                    color: white;
-                    padding: 0.75rem 1.5rem;
-                    border-radius: 6px;
-                    text-decoration: none;
-                    margin-top: 1rem;
-                    transition: background 0.2s;
-                }}
-                .button:hover {{
-                    background: #5568d3;
-                }}
-                .link {{
-                    color: #667eea;
-                    text-decoration: none;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🚀 Frontend Not Running</h1>
-                <p>The React frontend is not currently running. To start it:</p>
-                <div class="code">
-                    cd frontend<br>
-                    npm run dev
-                </div>
-                <p>Once started, the frontend will be available at:</p>
-                <div class="code">{frontend_url}</div>
-                <p>Or you can access the backend directly:</p>
-                <a href="/login" class="button">Go to Login</a><br>
-                <a href="/profile" class="link" style="margin-top: 1rem; display: inline-block;">View Profile</a>
-            </div>
-        </body>
-        </html>
-        """
-        return render_template_string(message), 503
+        pass
+    # Frontend not running: show instructions
+    from flask import render_template_string
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>Run the app</title>
+    <style>
+      body { font-family: system-ui; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f1f5f9; }
+      .box { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-width: 420px; }
+      h1 { margin: 0 0 1rem; color: #334155; font-size: 1.25rem; }
+      p { color: #64748b; margin: 0 0 1rem; font-size: 0.95rem; }
+      code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; }
+      .url { margin-top: 1rem; }
+      a { color: #6366f1; }
+    </style></head>
+    <body>
+      <div class="box">
+        <h1>Open the frontend app</h1>
+        <p>This is the API server. Use the <strong>frontend</strong> to view the dashboard.</p>
+        <p>In a terminal run:</p>
+        <p><code>cd frontend</code><br><code>npm run dev</code></p>
+        <p class="url">Then open: <a href="{{ url }}">{{ url }}</a></p>
+      </div>
+    </body></html>
+    """, url=frontend_url), 200
+
 
 @jobs.route('/api/stats')
 def api_stats():
